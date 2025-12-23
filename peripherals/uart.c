@@ -1,0 +1,334 @@
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
+#include "stdio.h"
+#include "string.h"
+
+#include "boards.h"
+#include "uart.h"
+#include "app_fifo.h"
+#include "lib_error.h"
+#include "app_timer.h"
+
+#include "trace.h"
+
+extern void Error_Handler(void);
+
+#define USART_RX_TIMEOUT       6
+
+static UART_HandleTypeDef m_huart1_handle;
+static DMA_HandleTypeDef  m_dma_usart1_handle;
+
+static uint8_t      m_rx1_data;                     // HAL库使用的串口接收缓冲
+static app_fifo_t   m_usart1_rx_fifo;               // rx 的信息fifo
+static uint8_t      m_usart1_rx_msg[256];           // fifo 长度
+static bool         m_is_rx1_done = false;          // 接收完成标志
+
+static UART_HandleTypeDef m_huart2_handle;
+static uint8_t      m_rx2_data;                     // HAL库使用的串口接收缓冲
+static app_fifo_t   m_usart2_rx_fifo;               // rx 的信息fifo
+static uint8_t      m_usart2_rx_msg[256];           // fifo 长度
+static bool         m_is_rx2_done = false;          // 接收完成标志
+
+TIMER_DEF(m_rx1_timer);
+TIMER_DEF(m_rx2_timer);
+
+static void usart1_timer_cb(void)
+{
+    m_is_rx1_done = true;
+}
+
+int usart1_init(void)
+{
+    int    err_code = 0;
+
+    m_huart1_handle.Instance        = USART1;               /* USART1 */
+    m_huart1_handle.Init.BaudRate   = USART1_BAUDRATE;      /* 波特率 */
+    m_huart1_handle.Init.WordLength = UART_WORDLENGTH_8B;   /* 字长为8位数据格式 */
+    m_huart1_handle.Init.StopBits   = UART_STOPBITS_1;      /* 一个停止位 */
+    m_huart1_handle.Init.Parity     = UART_PARITY_NONE;     /* 无奇偶校验位 */
+    m_huart1_handle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;  /* 无硬件流控 */
+    m_huart1_handle.Init.Mode       = UART_MODE_TX_RX;      /* 收发模式 */
+
+    m_huart1_handle.Init.OverSampling = UART_OVERSAMPLING_16;
+    m_huart1_handle.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+    m_huart1_handle.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+    m_huart1_handle.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+    HAL_UART_Init(&m_huart1_handle);                        /* HAL_UART_Init()会使能UART1 */
+
+    if (HAL_UARTEx_SetTxFifoThreshold(&m_huart1_handle, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    if (HAL_UARTEx_DisableFifoMode(&m_huart1_handle) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    
+    /* 该函数会开启接收中断：标志位UART_IT_RXNE，并且设置接收缓冲以及接收缓冲接收最大数据量 */
+    HAL_UART_Receive_IT(&m_huart1_handle, (uint8_t *)&m_rx1_data, sizeof(m_rx1_data));
+
+    err_code = app_fifo_init(&m_usart1_rx_fifo, m_usart1_rx_msg, sizeof(m_usart1_rx_msg));
+    if(err_code != ENONE)
+    {
+        return err_code;
+    }
+
+    //定义一个接收超时定时器
+    TIMER_CREATE(&m_rx1_timer, true, true, usart1_timer_cb);
+
+    return 0;
+}
+
+int usart1_tx(uint8_t *p_tx_data, uint16_t len)
+{
+    if(p_tx_data == NULL)
+    {
+        return -HAL_ERROR;
+    }
+
+    //return HAL_UART_Transmit(&m_huart1_handle, p_tx_data, len, 10);    //超时先写个demo
+    return HAL_UART_Transmit_DMA(&m_huart1_handle, p_tx_data, len);
+}
+
+int usart1_rx(uint8_t *p_rx_data)
+{
+    if(p_rx_data == NULL)
+    {
+        return -HAL_ERROR;
+    }
+
+    uint16_t len = 0;
+
+    if(m_is_rx1_done == true)
+    {
+        m_is_rx1_done = false;
+
+        if(p_rx_data)
+        {
+            len = fifo_length(&m_usart1_rx_fifo);
+            app_fifo_gets(&m_usart1_rx_fifo, p_rx_data, len);
+        }
+    }
+
+    return len;
+}
+
+
+void USART1_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&m_huart1_handle);
+}
+
+void USART2_IRQHandler()
+{
+    HAL_UART_IRQHandler(&m_huart2_handle);
+}
+
+/**
+ * @brief       Rx传输回调函数
+ * @param       huart: UART句柄类型指针
+ * @retval      无
+ */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if(huart->Instance == USART1)             /* 如果是串口1 */
+    {
+        /* 接收完成后在开启写一次中断接收 */
+        HAL_UART_Receive_IT(&m_huart1_handle, (uint8_t *)&m_rx1_data, sizeof(m_rx1_data));
+
+        TIMER_STOP(m_rx1_timer);
+
+        if(m_is_rx1_done == true)                                  //前一帧数据还没读走，清走
+        {
+            m_is_rx1_done = false;
+            app_fifo_flush(&m_usart1_rx_fifo);
+        }
+
+        app_fifo_puts(&m_usart1_rx_fifo, &m_rx1_data, 1);         // 接收到的数据入列
+
+        TIMER_START(m_rx1_timer, USART_RX_TIMEOUT);
+    }
+    else if(huart->Instance == USART2)        /* 如果是串口2 */
+    {
+        /* 接收完成后在开启写一次中断接收 */
+        HAL_UART_Receive_IT(&m_huart2_handle, (uint8_t *)&m_rx2_data, sizeof(m_rx2_data));
+
+        TIMER_STOP(m_rx2_timer);
+
+        if(m_is_rx2_done == true)                                  //前一帧数据还没读走，清走
+        {
+            m_is_rx2_done = false;
+            app_fifo_flush(&m_usart2_rx_fifo);
+        }
+
+        app_fifo_puts(&m_usart2_rx_fifo, &m_rx2_data, 1);         // 接收到的数据入列
+
+        TIMER_START(m_rx2_timer, USART_RX_TIMEOUT);
+    }
+}
+
+/**
+ * 串口硬件IO初始化，内部调用
+ */
+void HAL_UART_MspInit(UART_HandleTypeDef* huart)
+{
+  GPIO_InitTypeDef gpio_init_struct = {0};
+
+  if(huart->Instance == USART1)
+  {
+    __HAL_RCC_USART1_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    gpio_init_struct.Pin        = USART1_TX0_232_PIN | USART1_RX0_232_PIN;
+    gpio_init_struct.Mode       = GPIO_MODE_AF_PP;
+    gpio_init_struct.Pull       = GPIO_NOPULL;
+    gpio_init_struct.Speed      = GPIO_SPEED_FREQ_LOW;
+    gpio_init_struct.Alternate  = USART1_PIN_AF;
+  
+    HAL_GPIO_Init(USART1_TX0_232_PORT, &gpio_init_struct);
+
+    __HAL_RCC_DMAMUX1_CLK_ENABLE();
+    __HAL_RCC_DMA1_CLK_ENABLE();
+
+    m_dma_usart1_handle.Instance                  = DMA1_Channel2;
+    m_dma_usart1_handle.Init.Request              = DMA_REQUEST_USART1_TX;
+    m_dma_usart1_handle.Init.Direction            = DMA_MEMORY_TO_PERIPH;
+    m_dma_usart1_handle.Init.PeriphInc            = DMA_PINC_DISABLE;
+    m_dma_usart1_handle.Init.MemInc               = DMA_MINC_ENABLE;
+    m_dma_usart1_handle.Init.PeriphDataAlignment  = DMA_PDATAALIGN_BYTE;
+    m_dma_usart1_handle.Init.MemDataAlignment     = DMA_PDATAALIGN_BYTE;
+    m_dma_usart1_handle.Init.Mode                 = DMA_NORMAL;
+    m_dma_usart1_handle.Init.Priority             = DMA_PRIORITY_LOW;
+    if (HAL_DMA_Init(&m_dma_usart1_handle) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(huart, hdmatx, m_dma_usart1_handle);
+
+    HAL_NVIC_EnableIRQ(USART1_IRQn);                      /* 使能USART1中断通道 */
+    HAL_NVIC_SetPriority(USART1_IRQn, 0, 1);              /* 抢占优先级3，子优先级1 */
+  }
+  else if(huart->Instance == USART2)
+  {
+    __HAL_RCC_USART2_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    gpio_init_struct.Pin        = USART2_SCITX_485_PIN | USART2_SCIRX_485_PIN;
+    gpio_init_struct.Mode       = GPIO_MODE_AF_PP;
+    gpio_init_struct.Pull       = GPIO_NOPULL;
+    gpio_init_struct.Speed      = GPIO_SPEED_FREQ_LOW;
+    gpio_init_struct.Alternate  = USART2_PIN_AF;
+  
+    HAL_GPIO_Init(USART2_SCITX_485_PORT, &gpio_init_struct);
+
+    HAL_NVIC_EnableIRQ(USART2_IRQn);                      /* 使能 USART2 中断通道 */
+    HAL_NVIC_SetPriority(USART2_IRQn, 0, 2);              /* 抢占优先级2，子优先级2 */
+  }
+
+}
+
+/**
+ * 串口硬件IO恢复默认值，内部调用
+ */
+void HAL_UART_MspDeInit(UART_HandleTypeDef* huart)
+{
+  if(huart->Instance==USART1)
+  {
+    __HAL_RCC_USART1_CLK_DISABLE();
+
+    HAL_GPIO_DeInit(USART1_TX0_232_PORT, USART1_TX0_232_PIN | USART1_RX0_232_PIN);
+  }
+
+}
+
+
+
+
+/**
+ * Uart2
+ */
+static void usart2_timer_cb(void)
+{
+    m_is_rx2_done = true;
+}
+
+int usart2_init(void)
+{
+    int    err_code = 0;
+
+    m_huart2_handle.Instance        = USART2;               /* USART3 */
+    m_huart2_handle.Init.BaudRate   = USART2_BAUDRATE;      /* 波特率 */
+    m_huart2_handle.Init.WordLength = UART_WORDLENGTH_8B;   /* 字长为8位数据格式 */
+    m_huart2_handle.Init.StopBits   = UART_STOPBITS_1;      /* 一个停止位 */
+    m_huart2_handle.Init.Parity     = UART_PARITY_NONE;     /* 无奇偶校验位 */
+    m_huart2_handle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;  /* 无硬件流控 */
+    m_huart2_handle.Init.Mode       = UART_MODE_TX_RX;      /* 收发模式 */
+
+    m_huart2_handle.Init.OverSampling   = UART_OVERSAMPLING_16;
+    m_huart2_handle.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+    m_huart2_handle.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+    m_huart2_handle.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+    HAL_UART_Init(&m_huart2_handle);                        /* HAL_UART_Init()会使能 UART2 */
+
+    if (HAL_UARTEx_SetTxFifoThreshold(&m_huart2_handle, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    if (HAL_UARTEx_DisableFifoMode(&m_huart2_handle) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    
+    /* 该函数会开启接收中断：标志位UART_IT_RXNE，并且设置接收缓冲以及接收缓冲接收最大数据量 */
+    HAL_UART_Receive_IT(&m_huart2_handle, (uint8_t *)&m_rx2_data, sizeof(m_rx2_data));
+
+    err_code = app_fifo_init(&m_usart2_rx_fifo, m_usart2_rx_msg, sizeof(m_usart2_rx_msg));
+    if(err_code != ENONE)
+    {
+        return err_code;
+    }
+
+    //定义一个接收超时定时器
+    TIMER_CREATE(&m_rx2_timer, true, true, usart2_timer_cb);
+
+    return 0;
+}
+
+int usart2_tx(uint8_t *p_tx_data, uint16_t len)
+{
+    if(p_tx_data == NULL)
+    {
+        return -HAL_ERROR;
+    }
+
+    return HAL_UART_Transmit(&m_huart2_handle, p_tx_data, len, 20);    //超时先写个demo
+    //return HAL_UART_Transmit_DMA(&m_huart2_handle, p_tx_data, len);
+}
+
+int usart2_rx(uint8_t *p_rx_data)
+{
+    if(p_rx_data == NULL)
+    {
+        return -HAL_ERROR;
+    }
+
+    uint16_t len = 0;
+
+    if(m_is_rx2_done == true)
+    {
+        m_is_rx2_done = false;
+
+        if(p_rx_data)
+        {
+            len = fifo_length(&m_usart2_rx_fifo);
+            app_fifo_gets(&m_usart2_rx_fifo, p_rx_data, len);
+        }
+    }
+
+    return len;
+}
+

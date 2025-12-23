@@ -1,0 +1,234 @@
+#include "boards.h"
+#include "timer.h"
+#include "parameters.h"
+
+#include "gpio.h"
+#include "trace.h"
+
+extern void Error_Handler(void);
+
+static TIM_HandleTypeDef m_timer1_handle;
+static timer1_irq_cb_t   m_timer1_cb_handler = NULL;
+
+static void pwm_io_init(void)
+{
+    GPIO_InitTypeDef gpio_init_struct = { 0 };
+
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+
+    /** TIM1 GPIO Configuration
+     * 
+        PE9  ---- TIM1_CH1   AF2 ---- UH
+        PE8  ---- TIM1_CH1N  AF2 ---- UL
+        PE11 ---- TIM1_CH2   AF2 ---- VH
+        PE10 ---- TIM1_CH2N  AF2 ---- VL
+        PE13 ---- TIM1_CH3   AF2 ---- WH
+        PE12 ---- TIM1_CH3N  AF2 ---- WL
+     *
+    */
+
+    gpio_init_struct.Pin       = PWM_UH_PIN | PWM_UL_PIN | PWM_VH_PIN | PWM_VL_PIN | PWM_WH_PIN | PWM_WL_PIN ;
+    gpio_init_struct.Mode      = GPIO_MODE_AF_PP;
+    gpio_init_struct.Pull      = GPIO_NOPULL;
+    gpio_init_struct.Speed     = GPIO_SPEED_FREQ_LOW;
+    gpio_init_struct.Alternate = GPIO_AF2_TIM1;
+
+    HAL_GPIO_Init(PWM_UH_PORT, &gpio_init_struct);
+}
+
+int timer1_init(void)
+{
+    TIM_ClockConfigTypeDef          clk_cfg = {0};
+    TIM_MasterConfigTypeDef         master_cfg = {0};
+    TIM_OC_InitTypeDef              oc_cfg = {0};
+    TIM_BreakDeadTimeConfigTypeDef  break_deadtime_cfg = {0};
+
+    //timer base cfg
+    m_timer1_handle.Instance                = TIM1;
+    m_timer1_handle.Init.Prescaler          = 0;                                //不分频
+    //计数器交替地向上和向下计数。配置为输出的通道(TIMx_CCMRx寄存器中CCxS=00)的输出比较中断标志位
+    // 模式1 -- 只在计数器向下计数时被设置。
+    // 模式2 -- 只在计数器向上计数时被设置。
+    // 模式3 -- 在计数器向上和向下计数时均被设置。
+    m_timer1_handle.Init.CounterMode        = TIM_COUNTERMODE_CENTERALIGNED1;   //中心对齐模式1
+    m_timer1_handle.Init.Period             = PWM_PERIOD;                       //20K
+    m_timer1_handle.Init.ClockDivision      = TIM_CLOCKDIVISION_DIV2;
+    m_timer1_handle.Init.RepetitionCounter  = 0;
+    m_timer1_handle.Init.AutoReloadPreload  = TIM_AUTORELOAD_PRELOAD_ENABLE;
+
+    if (HAL_TIM_Base_Init(&m_timer1_handle) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    clk_cfg.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+    if (HAL_TIM_ConfigClockSource(&m_timer1_handle, &clk_cfg) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    if (HAL_TIM_PWM_Init(&m_timer1_handle) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    //master cfg
+    master_cfg.MasterOutputTrigger  = TIM_TRGO_UPDATE;
+    master_cfg.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+    master_cfg.MasterSlaveMode      = TIM_MASTERSLAVEMODE_DISABLE;
+    if (HAL_TIMEx_MasterConfigSynchronization(&m_timer1_handle, &master_cfg) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    //OC cfg
+    //PWM模式1－ 在向上计数时，一旦TIMx_CNT<TIMx_CCR1时通道1为有效电平，否则为无效电平；在向下计数时，一旦TIMx_CNT>TIMx_CCR1时通道1为无效电平(OC1REF=0)，否则为有效电平(OC1REF=1)。
+    //PWM模式2－ 在向上计数时，一旦TIMx_CNT<TIMx_CCR1时通道1为无效电平，否则为有效电平；在向下计数时，一旦TIMx_CNT>TIMx_CCR1时通道1为有效电平，否则为无效电平。
+    oc_cfg.OCMode       = TIM_OCMODE_PWM1;
+    oc_cfg.Pulse        = 0;
+    oc_cfg.OCPolarity   = TIM_OCPOLARITY_HIGH;
+    oc_cfg.OCNPolarity  = TIM_OCNPOLARITY_HIGH;
+    oc_cfg.OCFastMode   = TIM_OCFAST_DISABLE;
+    oc_cfg.OCIdleState  = TIM_OCIDLESTATE_RESET;
+    oc_cfg.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+    if (HAL_TIM_PWM_ConfigChannel(&m_timer1_handle, &oc_cfg, TIM_CHANNEL_1) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    __HAL_TIM_DISABLE_OCxPRELOAD(&m_timer1_handle, TIM_CHANNEL_1);
+
+    if (HAL_TIM_PWM_ConfigChannel(&m_timer1_handle, &oc_cfg, TIM_CHANNEL_2) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    __HAL_TIM_DISABLE_OCxPRELOAD(&m_timer1_handle, TIM_CHANNEL_2);
+
+    if (HAL_TIM_PWM_ConfigChannel(&m_timer1_handle, &oc_cfg, TIM_CHANNEL_3) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    __HAL_TIM_DISABLE_OCxPRELOAD(&m_timer1_handle, TIM_CHANNEL_3);
+
+    oc_cfg.Pulse = (PWM_PERIOD - 10);                           //用来触发 adc 采集电流
+    if (HAL_TIM_PWM_ConfigChannel(&m_timer1_handle, &oc_cfg, TIM_CHANNEL_4) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    //deadtime
+    break_deadtime_cfg.OffStateRunMode  = TIM_OSSR_DISABLE;
+    break_deadtime_cfg.OffStateIDLEMode = TIM_OSSI_DISABLE;
+    break_deadtime_cfg.LockLevel        = TIM_LOCKLEVEL_OFF;
+    break_deadtime_cfg.DeadTime         = 10;                  //死区延时
+    break_deadtime_cfg.BreakState       = TIM_BREAK_DISABLE;
+    break_deadtime_cfg.BreakPolarity    = TIM_BREAKPOLARITY_HIGH;
+    break_deadtime_cfg.AutomaticOutput  = TIM_AUTOMATICOUTPUT_DISABLE;
+    if (HAL_TIMEx_ConfigBreakDeadTime(&m_timer1_handle, &break_deadtime_cfg) != HAL_OK)
+    {
+        Error_Handler();
+    }
+    
+    //pwm gpio
+    pwm_io_init();
+
+    return 0;
+}
+
+
+/**
+  * @brief 定时器恢复默认状态
+  * @param htim_base: TIM_Base handle pointer
+  * @retval None
+  */
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
+{
+  if(tim_baseHandle->Instance == TIM1)
+  {
+        __HAL_RCC_TIM1_CLK_ENABLE();
+
+        HAL_NVIC_SetPriority(TIM1_CC_IRQn, 1, 0);
+        HAL_NVIC_EnableIRQ(TIM1_CC_IRQn);
+  }
+}
+
+//TIM1 的 Update更新中断
+void TIM1_UP_TIM16_IRQHandler(void)
+{
+    HAL_TIM_IRQHandler(&m_timer1_handle);
+
+    //自定义
+}
+
+//TIM1 的 CC Capture Compare 中断
+void TIM1_CC_IRQHandler(void)
+{
+    HAL_TIM_IRQHandler(&m_timer1_handle);
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if(htim->Instance == TIM1)  // 20K 的中断频率
+    {
+        if(m_timer1_cb_handler != NULL)
+        {
+            m_timer1_cb_handler();
+        }
+    }
+}
+
+void timer1_irq_cb_register(timer1_irq_cb_t cb)
+{
+    if(cb == NULL)
+    {
+        return;
+    }
+
+    m_timer1_cb_handler = cb;
+}
+
+
+
+/**
+ * @brief 设置uvw三相PWM占空比
+ * 
+ * @param u 0 ~ PWM_PERIOD
+ * @param v 0 ~ PWM_PERIOD
+ * @param w 0 ~ PWM_PERIOD
+ */
+void phase_pwm_set(uint32_t u, uint32_t v, uint32_t w)
+{
+    __HAL_TIM_SetCompare(&m_timer1_handle, TIM_CHANNEL_1, u);
+	__HAL_TIM_SetCompare(&m_timer1_handle, TIM_CHANNEL_2, v);
+	__HAL_TIM_SetCompare(&m_timer1_handle, TIM_CHANNEL_3, w);
+}
+
+void phase_pwm_start(void)
+{
+    HAL_TIM_PWM_Start(&m_timer1_handle, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&m_timer1_handle, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&m_timer1_handle, TIM_CHANNEL_3);
+    HAL_TIMEx_PWMN_Start(&m_timer1_handle, TIM_CHANNEL_1);
+    HAL_TIMEx_PWMN_Start(&m_timer1_handle, TIM_CHANNEL_2);
+    HAL_TIMEx_PWMN_Start(&m_timer1_handle, TIM_CHANNEL_3);
+    
+    HAL_TIM_PWM_Start_IT(&m_timer1_handle, TIM_CHANNEL_4);
+
+    HAL_TIM_Base_Start_IT(&m_timer1_handle);    //开启定时器以及中断
+//    HAL_TIM_Base_Start(&m_timer1_handle);     //开启定时器不开中断
+}
+
+void phase_pwm_stop(void)
+{
+    HAL_TIM_Base_Stop(&m_timer1_handle);
+
+    HAL_TIM_PWM_Stop(&m_timer1_handle, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Stop(&m_timer1_handle, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Stop(&m_timer1_handle, TIM_CHANNEL_3);
+    HAL_TIMEx_PWMN_Stop(&m_timer1_handle, TIM_CHANNEL_1);
+    HAL_TIMEx_PWMN_Stop(&m_timer1_handle, TIM_CHANNEL_2);
+    HAL_TIMEx_PWMN_Stop(&m_timer1_handle, TIM_CHANNEL_3);
+
+    TIM1->CCR1 = 0;
+	TIM1->CCR2 = 0;
+	TIM1->CCR3 = 0;
+}
