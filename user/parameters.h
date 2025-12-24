@@ -276,4 +276,10 @@ typedef struct
 extern mb_ctrl_param_t g_mb_ctrl_param;
 extern w25nxx_t g_w25nxx_dev;
 
+extern volt_dq_t           gt_vdq;
+extern transf_cos_sin_t    gt_cos_sin;
+extern float               gt_theta;
+extern volt_alpha_beta_t   gt_v_alpha_beta;
+extern int gt_sector;
+
 #endif

@@ -3,8 +3,6 @@
 #include <stddef.h>
 #include "rtwtypes.h"
 
-#include "parameters.h"
-
 #ifndef rtmGetErrorStatus
 # define rtmGetErrorStatus(rtm)        ((rtm)->errorStatus)
 #endif
@@ -118,7 +116,7 @@ extern current_dq_t   g_current_dq;
 
 extern void foc_algorithm_init(void);
 extern void foc_algorithm_step(void);
-
+void foc_algorithm_step_r(void);
 extern RT_MODEL *const rtM;
 
 

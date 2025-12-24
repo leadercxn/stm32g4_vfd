@@ -48,7 +48,7 @@ typedef struct
  */
 static void timer1_irq_cb_handler(void)
 {
-//    gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);
+    gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 0);
 
     adc3_inj_start();        //每一次中断触发一次电流采集 10K 的执行频率
 }
@@ -124,7 +124,7 @@ void motor_run(void)
                 g_foc_input.theta = g_foc_output.ekf[3];    //因为没有使用高频注入--所以没有角度切换--直接一开始就是用卡尔曼估算角度
                 g_speed_fdk       = g_foc_output.ekf[2];
 
-                g_foc_input.udc     = adc_sample_physical_value_get(ADC_CH_UBUS_VOLT);
+                g_foc_input.udc     = 23.0f;
                 g_foc_input.ia      = adc_sample_physical_value_get(ADC_CH_U_I);
                 g_foc_input.ib      = adc_sample_physical_value_get(ADC_CH_V_I);
                 g_foc_input.ic      = adc_sample_physical_value_get(ADC_CH_W_I);
@@ -157,6 +157,14 @@ void motor_run(void)
  */
 void motor_vf_run(void)
 {
+
+#ifdef DEBUG_SVPWM      // 测试 SVPWM
+    foc_algorithm_step_r();
+
+    TIM1->CCR1 = (uint16_t)(g_foc_output.tcmp1);     
+	TIM1->CCR2 = (uint16_t)(g_foc_output.tcmp2);
+	TIM1->CCR3 = (uint16_t)(g_foc_output.tcmp3);
+#else
     static uint16_t vf_start_cnt = 0;
     // 电机状态机
     switch(g_app_param.motor_sta)
@@ -228,7 +236,6 @@ void motor_vf_run(void)
                         vf_start_cnt = 0;
                     }
 #endif
-
                 }
                 else
                 {
@@ -246,7 +253,7 @@ void motor_vf_run(void)
                     g_foc_input.iq_ref  = g_speed_pid_out;              //使用速度环的输出值作为目标Iq
                 }
 
-                g_foc_input.udc     = adc_sample_physical_value_get(ADC_CH_UBUS_VOLT);
+                g_foc_input.udc     = 23.0f;
                 g_foc_input.ia      = adc_sample_physical_value_get(ADC_CH_U_I);
                 g_foc_input.ib      = adc_sample_physical_value_get(ADC_CH_V_I);
                 g_foc_input.ic      = adc_sample_physical_value_get(ADC_CH_W_I);
@@ -272,6 +279,8 @@ void motor_vf_run(void)
         case MOTOR_STA_ERROR:
             break;
     }
+#endif  // DEBUG_SVPWM
+
 }
 
 /**
@@ -345,7 +354,7 @@ void motor_if_run(void)
                     g_foc_input.iq_ref  = g_speed_pid_out;              //使用速度环的输出值作为目标Iq
                 }
 
-                g_foc_input.udc     = adc_sample_physical_value_get(ADC_CH_UBUS_VOLT);
+                g_foc_input.udc     = 23.0f;
                 g_foc_input.ia      = adc_sample_physical_value_get(ADC_CH_U_I);
                 g_foc_input.ib      = adc_sample_physical_value_get(ADC_CH_V_I);
                 g_foc_input.ic      = adc_sample_physical_value_get(ADC_CH_W_I);
@@ -581,7 +590,7 @@ int motor_ctrl_task(void)
     switch(g_app_param.motor_sta)
     {
         case MOTOR_STA_STOP:
-//            gpio_output_set(PWM_EN_PORT, PWM_EN_PIN, 0);
+            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);
             break;
 
         case MOTOR_STA_STOPPING:
@@ -599,13 +608,12 @@ int motor_ctrl_task(void)
             }
 
             TIMER_STOP(m_speed_pid_timer);
-//            gpio_output_set(PWM_EN_PORT, PWM_EN_PIN, 0);
 
             g_app_param.motor_sta = MOTOR_STA_STOP;
             break;
 
         case MOTOR_STA_RUNNING:
-//            gpio_output_set(PWM_EN_PORT, PWM_EN_PIN, 1);
+            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 1);
             break;
 
         case MOTOR_STA_STARTING:
@@ -618,11 +626,11 @@ int motor_ctrl_task(void)
                 phase_pwm_start();
             }
 
-//            gpio_output_set(PWM_EN_PORT, PWM_EN_PIN, 1);
+            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 1);
             break;
 
         case MOTOR_STA_ERROR:
-//            gpio_output_set(PWM_EN_PORT, PWM_EN_PIN, 0);
+            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);
             break;
     }
 

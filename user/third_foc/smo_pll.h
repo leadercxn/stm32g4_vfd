@@ -1,8 +1,6 @@
 #ifndef __SMO_PLL_H
 #define __SMO_PLL_H
 
-#include "parameters.h"
-
 typedef struct
 {
 	float est_i_alfa;

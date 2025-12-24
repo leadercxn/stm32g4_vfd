@@ -96,19 +96,7 @@ int main(void)
   bool led_stat = false;
   uint32_t test_inter_ticks = 0;
 
-  float angle = PI * 0.2f;
-
   uint32_t w25n_id = 0;
-
-#if 0
-  volt_dq_t           t_vdq;
-  transf_cos_sin_t    t_cos_sin;
-  float               t_theta = PI / 5;
-  volt_alpha_beta_t   t_v_alpha_beta;
-
-  t_vdq.Vd = 0;
-  t_vdq.Vq = 3.0f;
-#endif
 
   HAL_Init();
   sys_stm32_clock_init(85, 2, 2, 4, 8);       /* 设置时钟,170Mhz */
@@ -144,6 +132,7 @@ int main(void)
   w25nxx_reg_write(&g_w25nxx_dev, PROT_REG_SR1, 0);
   w25nxx_reg_write(&g_w25nxx_dev, CFG_REG_SR2, 0x18);
 
+// spi flash 测试
 #if 0
   uint8_t crc_data[32] = {0};
   uint8_t p_data[4] = {0x33, 0x44, 0x55, 0x77};
@@ -222,39 +211,19 @@ int main(void)
 
         gpio_output_set(DSP_LED_GREEN_PORT, DSP_LED_GREEN_PIN, led_stat);
 
-//        gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, led_stat);
-        gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, led_stat);
+#ifdef DEBUG_SVPWM      // 测试 SVPWM 波形
+        gt_vdq.vd = 0;                                         // D轴赋值
+        gt_vdq.vq = 4.0f;                                      // Q轴赋值
 
-#if 0
-        angle_to_cos_sin(t_theta, &t_cos_sin);
-        rev_park_transf(t_vdq, t_cos_sin, &t_v_alpha_beta);
-        svpwm_calc(t_v_alpha_beta, 24.0, g_foc_input.tpwm);
+        gt_theta += PI / 3;
 
-        TIM1->CCR1 = (uint16_t)(g_foc_output.tcmp1);     
-	      TIM1->CCR2 = (uint16_t)(g_foc_output.tcmp2);
-	      TIM1->CCR3 = (uint16_t)(g_foc_output.tcmp3);
+        gt_theta = radian_normalize(gt_theta);
 
-        t_theta += PI / 3;
-
-        t_theta = radian_normalize(t_theta);
-
-        trace_debug("t_theta %.3f, alpha %.3f, beta %.3f, CCR1 %lu, CCR2 %lu, CCR3 %lu\r\n", \
-          t_theta, t_v_alpha_beta.Valpha, t_v_alpha_beta.Vbeta, TIM1->CCR1, TIM1->CCR2, TIM1->CCR3);
+        trace_debug("t_theta %.3f, sector %d, CCR1 %lu, CCR2 %lu, CCR3 %lu\r\n", \
+          gt_theta, gt_sector, TIM1->CCR1, TIM1->CCR2, TIM1->CCR3);
 #endif
 
 //        sin_cal_speed_compare();
-
-// 测试svpwm
-#if 0
-        angle += PI / 3;
-
-        angle = radian_normalize(angle);
-
-        torque_set(2.0f, 0, angle);
-
-        trace_debug("angle %f\r\n", angle);
-#endif
-
         trace_debug("evt code %#llx, time %ld s\r\n", g_app_param.evt_code, test_inter_ticks/1000);
       }
 

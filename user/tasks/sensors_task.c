@@ -41,6 +41,7 @@ static void adc_reg_origin_data_to_phy_value(void)
 
 } 
 
+
 static void adc_inj_data_to_physical_value(void)
 {
     int temp;
@@ -48,22 +49,33 @@ static void adc_inj_data_to_physical_value(void)
 
     // U_I
     temp = m_adc_inj_origin_data[0] - m_adc_i_offset_origin_data[0];
-
-    result = temp * (float)(3.3f / 4.0960f / 0.12f);
+#if 0
+    result = temp * (float)(3.30f / 4.095f * 4.0f / 3.0f / 0.12f);
     result *= 0.001f;
+#endif
+    // 公式统一处理  3.30f / 4095.0f * 4.0f / 3.0f / 0.12f = 0.008954
+    result = temp * 0.008954f;
+
     m_adc_physical_value[ADC_CH_U_I] = result;
 
     // V_I
     temp = m_adc_inj_origin_data[1] - m_adc_i_offset_origin_data[1];
-    result = temp * (float)(3.3f / 4.0960f / 0.12f);
+#if 0
+    result = temp * (float)(3.30f / 4.095f * 4.0f / 3.0f / 0.12f);
     result *= 0.001f;
+#endif
+    result = temp * 0.008954f;
     m_adc_physical_value[ADC_CH_V_I] = result;
 
     // W_I
     temp = m_adc_inj_origin_data[2] - m_adc_i_offset_origin_data[2];
-    result = temp * (float)(3.3f / 4.0960f / 0.12f);
+#if 0
+    result = temp * (float)(3.30f / 4.095f * 4.0f / 3.0f / 0.12f);
     result *= 0.001f;
+#endif
+    result = temp * 0.008954f;
     m_adc_physical_value[ADC_CH_W_I] = result;
+
 }
 
 static uint16_t m_test_ticks = 0;
@@ -78,6 +90,7 @@ int sensors_task(void)
     static uint32_t offset_i_adc_buff[3][ADC_I_OFFSET_SAMP_TIMES] = {0};     //
     static uint8_t  offset_i_samp_index = 0;                                 //静态电流采样索引
 
+    //静态电流采样
     if(IS_PRE_MINUS_MID_OVER_POST(sys_time_ms_get(), offset_i_cal_ticks, 50))   //间隔 50ms
     {
         offset_i_cal_ticks = sys_time_ms_get();
@@ -107,6 +120,8 @@ int sensors_task(void)
                     offset_i_adc_total[i] /= ADC_I_OFFSET_SAMP_TIMES;       //计算平均值
                     m_adc_i_offset_origin_data[i] = offset_i_adc_total[i];    //保存静态电流偏移数据
                 }
+
+                trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
             }
         }
     }
@@ -165,19 +180,27 @@ int sensors_task(void)
                 sys_time_ms_get() );
 #endif
 
-#if 0
+#if 1
             trace_debug("3_ch8 U %ld, 3_ch9 V %ld, 3_ch10 %ld \r\n",
                 m_adc_inj_origin_data[0],
                 m_adc_inj_origin_data[1],
                 m_adc_inj_origin_data[2] );
+
+            float iu_volt = m_adc_inj_origin_data[0] * (float)(3.30f / 4.095f * 4.0f / 3.0f) * 0.001f;
+            float iv_volt = m_adc_inj_origin_data[1] * (float)(3.30f / 4.095f * 4.0f / 3.0f) * 0.001f;
+            float iw_volt = m_adc_inj_origin_data[2] * (float)(3.30f / 4.095f * 4.0f / 3.0f) * 0.001f;
+
+            trace_debug("3_ch8 U %.3fV, 3_ch9 V %.3fV, 3_ch10 %.3fV \r\n",
+                iu_volt, iv_volt, iw_volt );
 #endif
         }
 
         adc_reg_origin_data_to_phy_value();     //采样数据转换物理数据
     }
 
+// 中断计时验证
 #if 0
-    if(m_test_ticks >= 1000)
+    if(m_test_ticks >= 1000)    // 理论上对应 100ms
     {
         m_test_ticks = 0;
 
@@ -220,7 +243,7 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         m_adc_inj_origin_data[0] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_1); //U电流
         m_adc_inj_origin_data[1] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_2); //V电流
         m_adc_inj_origin_data[2] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_3); //W电流
-
+//gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);
         adc_inj_data_to_physical_value();
 
         m_test_ticks++;
@@ -248,7 +271,6 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         }
 
 //        gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);
-//        gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 0);
+        gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);
     }
 }
-

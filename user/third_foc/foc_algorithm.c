@@ -1,4 +1,7 @@
 #include "foc_algorithm.h"
+#include "smo_pll.h"
+#include "speed_pid.h"
+#include "parameters.h"
 
 #include "trace.h"
 
@@ -66,6 +69,8 @@ void svpwm_calc(volt_alpha_beta_t v_alpha_beta_temp, real32_T udc_temp, real32_T
   {
     sector += 4;
   }
+
+  gt_sector = sector;
 
 //  trace_debug("sector %d, alpha %.3f, beta %.3f\r\n", sector, v_alpha_beta_temp.v_alpha, v_alpha_beta_temp.v_beta);
 
@@ -242,7 +247,7 @@ void foc_algorithm_step(void)
   m_foc_interface_sts.ekf_interface[5] = g_foc_input.ls;
   m_foc_interface_sts.ekf_interface[6] = g_foc_input.flux;
 
-  smo_observer(m_volt_alpha_beta.v_alpha, m_volt_alpha_beta.v_beta, m_current_alpha_beta.i_alpha, m_current_alpha_beta.i_beta, &g_smo);
+//  smo_observer(m_volt_alpha_beta.v_alpha, m_volt_alpha_beta.v_beta, m_current_alpha_beta.i_alpha, m_current_alpha_beta.i_beta, &g_smo);
 
   stm32_ekf_outputs_wrapper(&m_foc_interface_sts.ekf_interface[0], &g_foc_output.ekf[0],  //扩展卡尔曼估计转子位置与速度的输出函数
                             &m_foc_interface_sts.ekf_sts[0]);
@@ -252,7 +257,16 @@ void foc_algorithm_step(void)
   stm32_ekf_update_wrapper(&m_foc_interface_sts.ekf_interface[0], &g_foc_output.ekf[0],   //扩展卡尔曼滤波算法的计算
                            &m_foc_interface_sts.ekf_sts[0]);  
 
-  pll_control(g_smo.v_alfa, g_smo.v_beta, &g_pll);
+//  pll_control(g_smo.v_alfa, g_smo.v_beta, &g_pll);
+}
+
+void foc_algorithm_step_r(void)
+{
+  angle_to_cos_sin(gt_theta, &gt_cos_sin);                                   //由角度计算 park变换和 反park变换的 COS SIN值
+
+  rev_park_transf(gt_vdq, gt_cos_sin, &gt_v_alpha_beta);                     //反park变换  通过电流环得到的dq轴电压信息结合角度信息，去把直流信息转化为交流信息用于SVPWM的输入
+
+  svpwm_calc(gt_v_alpha_beta, 24.0f, g_foc_input.tpwm);       //SVPWM 计算模块
 }
 
 void foc_algorithm_init(void)

@@ -109,7 +109,8 @@ int timer1_init(void)
     }
     __HAL_TIM_DISABLE_OCxPRELOAD(&m_timer1_handle, TIM_CHANNEL_3);
 
-    oc_cfg.Pulse = (PWM_PERIOD - 10);                           //用来触发 adc 采集电流
+    oc_cfg.Pulse = (PWM_PERIOD - 10);                          //用来触发 adc 采集电流
+//    oc_cfg.Pulse = 10;                                           //用来触发 adc 采集电流 -- 因为硬件做了取反
     if (HAL_TIM_PWM_ConfigChannel(&m_timer1_handle, &oc_cfg, TIM_CHANNEL_4) != HAL_OK)
     {
         Error_Handler();

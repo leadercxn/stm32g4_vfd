@@ -1,4 +1,6 @@
 #include "smo_pll.h"
+#include "speed_pid.h"
+#include "parameters.h"
 //#define RS_PARAMETER     0.2f           //电阻
 //#define LS_PARAMETER     0.0004f          //电感
 //#define FLUX_PARAMETER   0.0090969f        //磁链

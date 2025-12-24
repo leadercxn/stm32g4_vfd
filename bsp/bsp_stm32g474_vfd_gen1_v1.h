@@ -47,7 +47,7 @@
 #define USART2_RD_TX_DIR_PORT       GPIOD
 #define USART2_RD_TX_DIR_PIN        GPIO_PIN_4
 
-#define USART1_BAUDRATE             576000          // 921000太快了，232通信不稳定
+#define USART1_BAUDRATE             460800          // 921000太快了，232通信不稳定, 576000 接收也不稳定
 #define USART2_BAUDRATE             115200
 
 //INPUT

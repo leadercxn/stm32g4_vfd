@@ -56,9 +56,11 @@ C_DEFS =  			\
 -DSTM32G474xx		\
 -DSIMULINK_USE_ARM_MATH		\
 -DTRACE_LEVEL=7		\
--DTRACE_ENABLE		\
+#-DTRACE_ENABLE		\
+#-DDEBUG_SVPWM		\
 
 # 假如使用VOFA float ，就要屏蔽 TRACE_ENABLE
+# 假如调试SVPWM，就要打开 DEBUG_SVPWM
 
 # AS includes
 AS_INCLUDES = 

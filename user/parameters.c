@@ -36,5 +36,9 @@ w25nxx_t g_w25nxx_dev = {
     .transfer = spi1_bytes_wr,
 };
 
-
+volt_dq_t           gt_vdq;
+transf_cos_sin_t    gt_cos_sin;
+float               gt_theta = PI / 5;
+volt_alpha_beta_t   gt_v_alpha_beta;
+int gt_sector = 0;
 
