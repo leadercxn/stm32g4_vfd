@@ -12,7 +12,7 @@ app_param_t g_app_param = {
 
     .motor_speed_set    = 10.0f,
 
-    .target_uq = 0.9f,
+    .target_uq = 0.5f,
     .target_iq = 0.5f,
 
     .curr_uq = 0.0f,

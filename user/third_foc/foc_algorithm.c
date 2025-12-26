@@ -266,7 +266,7 @@ void foc_algorithm_step_r(void)
 
   rev_park_transf(gt_vdq, gt_cos_sin, &gt_v_alpha_beta);                     //反park变换  通过电流环得到的dq轴电压信息结合角度信息，去把直流信息转化为交流信息用于SVPWM的输入
 
-  svpwm_calc(gt_v_alpha_beta, 24.0f, g_foc_input.tpwm);       //SVPWM 计算模块
+  svpwm_calc(gt_v_alpha_beta, 23.0f, g_foc_input.tpwm);       //SVPWM 计算模块
 }
 
 void foc_algorithm_init(void)

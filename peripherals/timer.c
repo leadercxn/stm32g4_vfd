@@ -120,7 +120,7 @@ int timer1_init(void)
     break_deadtime_cfg.OffStateRunMode  = TIM_OSSR_DISABLE;
     break_deadtime_cfg.OffStateIDLEMode = TIM_OSSI_DISABLE;
     break_deadtime_cfg.LockLevel        = TIM_LOCKLEVEL_OFF;
-    break_deadtime_cfg.DeadTime         = 10;                  //死区延时
+    break_deadtime_cfg.DeadTime         = 120;                  //死区延时
     break_deadtime_cfg.BreakState       = TIM_BREAK_DISABLE;
     break_deadtime_cfg.BreakPolarity    = TIM_BREAKPOLARITY_HIGH;
     break_deadtime_cfg.AutomaticOutput  = TIM_AUTOMATICOUTPUT_DISABLE;
