@@ -73,19 +73,23 @@
 typedef enum
 {
     MOTOR_STA_STOP,     //停止
+
     MOTOR_STA_STOPPING, //停止中
-    MOTOR_STA_RUNNING,  //运行中
+
     MOTOR_STA_STARTING, //启动中
+
+    MOTOR_STA_VF_START,     //vf启动中
+    MOTOR_STA_VF_ACC,       //vf加速中
+    MOTOR_STA_VF_DEC,       //vf减速中
+    MOTOR_STA_VF_CONST,     //vf恒速中
+
+    MOTOR_STA_EKF_START,    //ekf启动中
+    MOTOR_STA_EKF_ACC,      //ekf加速中
+    MOTOR_STA_EKF_DEC,      //ekf减速中
+    MOTOR_STA_EKF_CONST,    //ekf恒速中
 
     MOTOR_STA_ERROR,    //故障状态
 } motor_sta_e;
-
-typedef enum
-{
-    MOTOR_START_STA_ACC,        //加速中
-    MOTOR_START_STA_ACC_END,    //加速完成
-    MOTOR_START_STA_CONST,      //恒速转动
-} motor_start_sta_e;
 
 typedef enum
 {
@@ -100,6 +104,16 @@ typedef enum
     ACC_DOWN,       //减速
     ACC_START,      //开始加速
 } motor_acc_dir_e;
+
+typedef enum
+{
+    MOTOR_CMD_NONE,      //无命令
+    MOTOR_CMD_STARTUP,   //启动命令
+    MOTOR_CMD_STOP,      //停止命令
+    MOTOR_CMD_RESET,     //复位命令
+    MOTOR_CMD_STOP_NIW,  //紧急停止命令
+} motor_cmd_e;
+
 
 /*********** MODBUS **************/
 typedef enum
@@ -212,25 +226,27 @@ typedef enum {
 // 全局应用参数
 typedef struct
 {
-    uint8_t     slave_addr;         // modbus 从机地址
+    uint8_t             slave_addr;         // modbus 从机地址
 
-    motor_sta_e motor_sta;          // 电机状态
-    motor_sta_e pre_motor_sta;      // 电机前一状态
+    motor_sta_e         motor_sta;          // 电机状态
+    motor_sta_e         pre_motor_sta;      // 电机前一状态
 
-    motor_dir_e motor_dir;          // 电机方向
+    motor_dir_e         motor_dir;          // 电机方向
+    motor_cmd_e         motor_cmd;          // 电机命令
+    motor_cmd_e         old_motor_cmd;      // 上一次电机命令
 
-    motor_start_sta_e   motor_start_acc_sta;    //电机启动加速状态
+    float       target_speed_ring_s;    // 电机设定速度，单位： ring/s 圈/秒
+    float       curr_speed_rad_s;       // 电机当前速度，单位   rad/s  弧度/秒
 
-    float       motor_speed_set;    // 电机设定速度，单位RPM
-
-    float       target_uq;          // q轴电压 单位V
+    float       vf_target_uq;       // vf阶段目标Uq, q轴电压 单位V
     float       target_iq;          // q轴电流 单位A
 
-    float       curr_uq;            //  当前Uq
+    float       vf_curr_uq;         //  vf阶段当前Uq
     float       curr_iq;            //  当前Iq
-    float       curr_theta;         //  当前角度值
+    float       vf_curr_theta;         //  当前角度值
 
-    float       target_step_angle;  // 步进角度，单位：弧度
+    float       vf_step_rad;        // vf阶段， 步进角度，单位：弧度
+
 
     motor_acc_dir_e     iq_acc_dir;     // iq加速的方向,  0：iq达标  1：iq加速  2:iq减速 4:开始加速
     bool        is_speed_ring_start;    // 速度环开始标记
