@@ -3,8 +3,6 @@
 
 #define SPEED_PID_PERIOD    0.001F
 
-real32_T g_speed_ref;        //速度参考, 目标速度， rad/s
-real32_T g_speed_fdk;        //速度反馈，实际速度,  rad/s
 real32_T g_speed_pid_out;    //速度PID输出，也就是Q轴电流环的参考             
 
 speed_pid_t g_speed_pid;

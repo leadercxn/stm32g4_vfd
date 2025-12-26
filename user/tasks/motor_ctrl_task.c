@@ -26,7 +26,7 @@ typedef enum
     CMD_TARGET_SPEED,       //目标速度
     CMD_TARGET_IQ,          //目标d轴电流
     CMD_TARGET_UQ,          //目标q轴电压
-    CMD_TARGET_STEP_ANGLE,  //目标步进幅度
+    CMD_VF_STEP_RAD_S,      //目标步进幅度
     CMD_DIR,                //方向
 } uart_cmd_e;
 
@@ -139,14 +139,14 @@ void motor_vf_run(void)
                 {
 // 使用卡尔曼
 #if 1
-                    g_speed_fdk         = g_foc_output.ekf[2];          //使用卡尔曼估算的角速度
-                    g_foc_input.theta   = g_foc_output.ekf[3];          //使用卡尔曼估算角度
+                    g_app_param.curr_speed_rad_s    = g_foc_output.ekf[2];          //使用卡尔曼估算的角速度
+                    g_foc_input.theta               = g_foc_output.ekf[3];          //使用卡尔曼估算角度
 #endif
 
 // 使用PLL
 #if 0
-                    g_speed_fdk         = g_pll.we;          //使用 PLL 估算的角速度
-                    g_foc_input.theta   = g_pll.theta;       //使用 PLL 估算角度
+                    g_app_param.curr_speed_rad_s    = g_pll.we;          //使用 PLL 估算的角速度
+                    g_foc_input.theta               = g_pll.theta;       //使用 PLL 估算角度
 #endif
                     g_foc_input.iq_ref  = g_speed_pid_out;              //使用速度环的输出值作为目标Iq
                 }
@@ -192,8 +192,8 @@ static void vofa_send(void)
     justfloat_update(g_current_dq.iq,    0);        //当前Iq        -- 4
     justfloat_update(g_foc_input.iq_ref,    0);     //目标Iq        -- 5
     justfloat_update(g_voltage_dq.vq,    0);        //实际的Vq      -- 6
-    justfloat_update(g_speed_ref,    0);            //目标speed     -- 7
-    justfloat_update(g_app_param.vf_curr_theta,  1);   //强拖的角度     -- 8
+    justfloat_update(g_app_param.target_speed_ring_s,    0);    //目标speed     -- 7
+    justfloat_update(g_app_param.vf_curr_theta,  1);            //强拖的角度     -- 8
 #endif
 
     justfloat_update(g_foc_output.ekf[3], 0);       //卡尔曼估算角度 -- 0
@@ -213,7 +213,7 @@ static void vofa_send(void)
 static void speed_pid_timer_handler(void *p_data)
 {
     //速度环执行
-    speed_pid_cal(g_speed_ref, g_speed_fdk, &g_speed_pid_out, &g_speed_pid);
+    speed_pid_cal(g_app_param.target_speed_ring_s, g_app_param.curr_speed_rad_s, &g_speed_pid_out, &g_speed_pid);
 }
 
 static void usart_ctrl_cmd_handler(void)
@@ -246,8 +246,6 @@ static void usart_ctrl_cmd_handler(void)
                     break;
 
                 case CMD_TARGET_SPEED:
-                        trace_debug("target speed %.4f\r\n", usart1_rx_data.data.fdate);
-
                         if(g_app_param.motor_dir == MOTOR_DIR_CCW)  //逆
                         {
                             if(usart1_rx_data.data.fdate < 0.0f)
@@ -265,12 +263,10 @@ static void usart_ctrl_cmd_handler(void)
 
                         g_app_param.target_speed_ring_s = usart1_rx_data.data.fdate;
 
-                        g_speed_ref = g_app_param.target_speed_ring_s;
+                        trace_debug("target speed %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
                 case CMD_TARGET_IQ:
-                        trace_debug("target Iq %.4f\r\n", usart1_rx_data.data.fdate);
-
                         if(g_app_param.motor_dir == MOTOR_DIR_CCW)  //逆
                         {
                             if(usart1_rx_data.data.fdate < 0.0f)
@@ -291,18 +287,18 @@ static void usart_ctrl_cmd_handler(void)
                         {
                             g_app_param.target_iq = 0.0f;
                         }
+
+                        trace_debug("target Iq %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
                 case CMD_TARGET_UQ:
-                        trace_debug("target Uq %.4f\r\n", usart1_rx_data.data.fdate);
-
                         g_app_param.vf_target_uq  = usart1_rx_data.data.fdate;
                         g_app_param.iq_acc_dir = ACC_START;
+
+                        trace_debug("target Uq %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
-                case CMD_TARGET_STEP_ANGLE:
-                        trace_debug("target step angle %.4f\r\n", usart1_rx_data.data.fdate);
-
+                case CMD_VF_STEP_RAD_S:
                         if(g_app_param.motor_dir == MOTOR_DIR_CCW)  //逆
                         {
                             if(usart1_rx_data.data.fdate < 0.0f)
@@ -319,6 +315,8 @@ static void usart_ctrl_cmd_handler(void)
                         }
 
                         g_app_param.vf_step_rad = usart1_rx_data.data.fdate;
+
+                        trace_debug("target step angle %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
                 case CMD_DIR:
@@ -332,7 +330,6 @@ static void usart_ctrl_cmd_handler(void)
                         {
                             g_app_param.target_speed_ring_s = -g_app_param.target_speed_ring_s;
                         }
-                        g_speed_ref = g_app_param.target_speed_ring_s;
 
                         if(g_app_param.target_iq < 0.0f)
                         {
@@ -354,7 +351,6 @@ static void usart_ctrl_cmd_handler(void)
                         {
                             g_app_param.target_speed_ring_s = -g_app_param.target_speed_ring_s;
                         }
-                        g_speed_ref = g_app_param.target_speed_ring_s;
 
                         if(g_app_param.target_iq > 0.0f)
                         {
@@ -398,8 +394,6 @@ int motor_ctrl_task(void)
         {
             g_app_param.motor_sta   = MOTOR_STA_STARTING;
             g_app_param.iq_acc_dir  = ACC_START;
-
-            g_speed_ref = g_app_param.target_speed_ring_s;
         }
         else if(g_app_param.motor_cmd == MOTOR_CMD_STOP)
         {

@@ -243,9 +243,10 @@ typedef struct
 
     float       vf_curr_uq;         //  vf阶段当前Uq
     float       curr_iq;            //  当前Iq
-    float       vf_curr_theta;         //  当前角度值
+    float       vf_curr_theta;      //  vf阶段当前角度值
 
-    float       vf_step_rad;        // vf阶段， 步进角度，单位：弧度
+    float       vf_step_rad;        //  vf阶段， 步进角度，单位：弧度
+    float       ekf_step_ring_s;    //  EKF阶段 步进角度，单位：圈/秒
 
 
     motor_acc_dir_e     iq_acc_dir;     // iq加速的方向,  0：iq达标  1：iq加速  2:iq减速 4:开始加速

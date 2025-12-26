@@ -104,7 +104,7 @@ void pll_control(float e_alfa, float e_beta, pll_struct_t *pll)
 	iir_filter(pll->we ,&pll->we, &g_pll_iir_lpf_par);
 
 	//电机反转补偿π
-	if((pll->we < -10.0f) && (g_speed_ref < 0.0f))
+	if((pll->we < -10.0f) && (g_app_param.target_speed_ring_s < 0.0f))
 	{
 		pll->theta += PI;
 

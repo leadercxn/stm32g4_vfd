@@ -17,8 +17,6 @@
 
 
 
-extern real32_T g_speed_ref;                 
-extern real32_T g_speed_fdk;                 
 extern real32_T g_speed_pid_out;             
 
 typedef struct

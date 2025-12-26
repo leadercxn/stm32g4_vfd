@@ -24,6 +24,7 @@ app_param_t g_app_param = {
     .evt_code = 0,
 
     .vf_step_rad = 0.001f,
+    .ekf_step_ring_s = 1.0f,
 };
 
 mb_ctrl_param_t g_mb_ctrl_param;
