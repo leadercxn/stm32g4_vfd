@@ -59,7 +59,7 @@ static void timer1_irq_cb_handler(void)
 void motor_vf_run(void)
 {
 
-    static uint8_t cnt = 0;
+    static uint8_t pwm_cnt = 0;
 
 #ifdef DEBUG_SVPWM      // 测试 SVPWM
     foc_algorithm_step_r();
@@ -85,6 +85,8 @@ void motor_vf_run(void)
             {
                 if(g_app_param.iq_acc_dir == ACC_START)                             //Iq发生改变，开始调整Iq
                 {
+                    pwm_cnt = 0;
+
                     if(g_app_param.curr_uq < g_app_param.target_uq)
                     {
                         g_app_param.iq_acc_dir = ACC_UP;
@@ -122,7 +124,7 @@ void motor_vf_run(void)
                     g_foc_input.iq_ref = g_app_param.curr_uq;
 
 //速度稳定后切入到速度环
-#if 0
+#if 1
                     if( (g_foc_output.ekf[2] > 40.0f) || (g_foc_output.ekf[2] < -40.0f) )    //检测速度是否达标速度闭环
                     {
                         vf_start_cnt++;
@@ -169,10 +171,10 @@ void motor_vf_run(void)
 	            TIM1->CCR2 = (uint16_t)(g_foc_output.tcmp2);
 	            TIM1->CCR3 = (uint16_t)(g_foc_output.tcmp3);
 
-                cnt++;
-                if(cnt > 2)
+                pwm_cnt++;
+                if(pwm_cnt > 2)     // 等待3个PWM周期后，闭合IGBT，避免反相电路输出上电就是高电平，同时导通上下半桥
                 {
-                    cnt = 0;
+                    pwm_cnt = 0;
                     gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 1);
                 }
             }
