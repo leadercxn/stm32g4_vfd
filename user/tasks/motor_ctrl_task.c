@@ -59,8 +59,9 @@ static void timer1_irq_cb_handler(void)
  */
 void motor_vf_run(void)
 {
-
-    static uint8_t pwm_start_cnt = 0;
+    static uint8_t  pwm_start_cnt = 0;
+    static uint16_t vf_start_cnt = 0;
+    static uint16_t ekf_acc_dec_step_cnt = 0;
 
 #ifdef DEBUG_SVPWM      // 测试 SVPWM
     foc_algorithm_step_r();
@@ -69,114 +70,6 @@ void motor_vf_run(void)
 	TIM1->CCR2 = (uint16_t)(g_foc_output.tcmp2);
 	TIM1->CCR3 = (uint16_t)(g_foc_output.tcmp3);
 #else
-    static uint16_t vf_start_cnt = 0;
-    // 电机状态机
-    switch(g_app_param.motor_sta)
-    {
-        case MOTOR_STA_STOP:
-            break;
-
-        case MOTOR_STA_STARTING:
-                if(g_app_param.iq_acc_dir == ACC_START)                             //Iq发生改变，开始调整Iq
-                {
-                    pwm_start_cnt = 0;
-
-                    if(g_app_param.vf_curr_uq < g_app_param.vf_target_uq)
-                    {
-                        g_app_param.iq_acc_dir = ACC_UP;
-                    }
-                    else
-                    {
-                        g_app_param.iq_acc_dir = ACC_DOWN;
-                    }
-                }
-
-                if(g_app_param.iq_acc_dir == ACC_UP)    //iq 加速
-                {
-                    g_app_param.vf_curr_uq += 0.001f;  //步进
-
-                    if(g_app_param.vf_curr_uq > g_app_param.vf_target_uq)
-                    {
-                        g_app_param.iq_acc_dir = ACC_DONE;
-                        g_app_param.vf_curr_uq = g_app_param.vf_target_uq;
-                    }
-                }
-                else if(g_app_param.iq_acc_dir == ACC_DOWN) //iq 减速
-                {
-                    g_app_param.vf_curr_uq -= 0.001f;  //步进
-
-                    if(g_app_param.vf_curr_uq < g_app_param.vf_target_uq)
-                    {
-                        g_app_param.iq_acc_dir = ACC_DONE;
-                        g_app_param.vf_curr_uq = g_app_param.vf_target_uq;
-                    }
-                }
-
-                if( !g_app_param.is_speed_ring_start )                  //速度闭环未开始
-                {
-                    g_foc_input.theta = g_app_param.vf_curr_theta;
-                    g_foc_input.iq_ref = g_app_param.vf_curr_uq;
-
-//速度稳定后切入到速度环
-#if 1
-                    if( (g_foc_output.ekf[2] > 40.0f) || (g_foc_output.ekf[2] < -40.0f) )    //检测速度是否达标速度闭环
-                    {
-                        vf_start_cnt++;
-                        if(vf_start_cnt > 100)                         //速度环达标超 0.1 * 100 ms 后，转到速度闭环
-                        {
-                            vf_start_cnt = 0;
-                            g_app_param.is_speed_ring_start = true;
-
-                            TIMER_START(m_speed_pid_timer, 1);         //1K的执行频率
-                        }
-                    }
-                    else
-                    {
-                        vf_start_cnt = 0;
-                    }
-#endif
-                }
-                else
-                {
-                    // 使用卡尔曼
-                    g_foc_input.theta       = g_foc_output.ekf[3];          //使用卡尔曼估算角度
-                    g_foc_input.iq_ref      = g_speed_pid_out;              //使用速度环的输出值作为目标Iq
-                }
-
-                g_foc_input.udc     = 24.0f;
-                g_foc_input.ia      = adc_sample_physical_value_get(ADC_CH_U_I);
-                g_foc_input.ib      = adc_sample_physical_value_get(ADC_CH_V_I);
-                g_foc_input.ic      = adc_sample_physical_value_get(ADC_CH_W_I);
-                g_foc_input.id_ref  = 0.0f;
-
-                //计算好后赋值到PWM_CCRX比较寄存器通道
-   	            foc_algorithm_step();
-
-                TIM1->CCR1 = (uint16_t)(g_foc_output.tcmp1);     
-	            TIM1->CCR2 = (uint16_t)(g_foc_output.tcmp2);
-	            TIM1->CCR3 = (uint16_t)(g_foc_output.tcmp3);
-
-                pwm_start_cnt++;
-                if(pwm_start_cnt > 2)     // 等待3个PWM周期后，闭合IGBT，避免反相电路输出上电就是高电平，同时导通上下半桥
-                {
-                    pwm_start_cnt = 0;
-                    gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 1);
-                }
-            break;
-
-        case MOTOR_STA_ERROR:
-            break;
-    }
-#endif  // DEBUG_SVPWM
-
-}
-
-void motor_vf_run_r(void)
-{
-    static uint8_t  pwm_start_cnt = 0;
-    static uint16_t vf_start_cnt = 0;
-    static uint16_t ekf_acc_dec_step_cnt = 0;
-
     if(g_app_param.motor_sta == MOTOR_STA_VF_START)             // vf启动
     {
         pwm_start_cnt = 0;      //在每次启动的时候，都清0一次
@@ -305,6 +198,8 @@ void motor_vf_run_r(void)
         pwm_start_cnt = 0;
         gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 1);
     }
+#endif  // DEBUG_SVPWM
+
 }
 
 /**
@@ -338,12 +233,6 @@ static void vofa_send(void)
 /**
  * 速度环回调函数
  */
-static void speed_pid_timer_handler(void *p_data)
-{
-    //速度环执行
-    speed_pid_cal(g_app_param.target_speed_ring_s, g_foc_output.ekf[2], &g_speed_pid_out, &g_speed_pid);
-}
-
 static void speed_pid_timer_handler_r(void *p_data)
 {
     //速度环执行
@@ -427,7 +316,6 @@ static void usart_ctrl_cmd_handler(void)
 
                 case CMD_TARGET_UQ:
                         g_app_param.vf_target_uq  = usart1_rx_data.data.fdate;
-                        g_app_param.iq_acc_dir = ACC_START;
 
                         trace_debug("target Uq %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
@@ -517,85 +405,6 @@ int motor_ctrl_task(void)
         init_done = true;
         timer1_irq_cb_register(timer1_irq_cb_handler);      //回调函数注册到 timer8 的中断函数里面
 
-        TIMER_CREATE(&m_speed_pid_timer, false, true, speed_pid_timer_handler);     //循环定时器，立马执行
-    }
-
-    usart_ctrl_cmd_handler();    //串口控制命令处理
-
-    if(g_app_param.motor_cmd != g_app_param.old_motor_cmd)
-    {
-        if(g_app_param.motor_cmd == MOTOR_CMD_STARTUP)
-        {
-            g_app_param.motor_sta   = MOTOR_STA_STARTING;
-            g_app_param.iq_acc_dir  = ACC_START;
-        }
-        else if(g_app_param.motor_cmd == MOTOR_CMD_STOP)
-        {
-            g_app_param.motor_sta = MOTOR_STA_STOP;
-        }
-
-        g_app_param.old_motor_cmd = g_app_param.motor_cmd;
-    }
-
-    // 电机状态机
-    switch(g_app_param.motor_sta)
-    {
-        case MOTOR_STA_STOP:
-            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);
-
-            if(g_app_param.motor_sta != g_app_param.pre_motor_sta)  //开始停机
-            {
-                phase_pwm_stop();
-
-                g_app_param.is_speed_ring_start = false;            //参数恢复
-                g_app_param.curr_iq = 0.0f;
-                g_app_param.vf_curr_uq = 0.0f;
-                g_app_param.vf_curr_theta = 0.0f;
-                g_app_param.iq_acc_dir = ACC_DONE;
-
-                foc_algorithm_init();                               //FOC 算法参数初始化
-
-                TIMER_STOP(m_speed_pid_timer);
-            }
-            break;
-
-        case MOTOR_STA_STARTING:
-            if(g_app_param.motor_sta != g_app_param.pre_motor_sta)  //每一次启动都要foc参数初始化
-            {
-                if_start_param_init();                              //IF启动参数初始化
-
-                foc_algorithm_init();                               //FOC 算法参数初始化
-
-                phase_pwm_start();
-            }
-            break;
-
-        case MOTOR_STA_ERROR:
-            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);
-            break;
-    }
-
-#ifndef TRACE_ENABLE
-    vofa_send();    //vofa 显示
-#endif
-
-    if(g_app_param.motor_sta != g_app_param.pre_motor_sta)
-    {
-        g_app_param.pre_motor_sta = g_app_param.motor_sta;
-    }
-
-    return 0;
-}
-
-int motor_ctrl_task_r(void)
-{
-    static bool init_done = false;
-
-    if(!init_done)
-    {
-        init_done = true;
-        timer1_irq_cb_register(timer1_irq_cb_handler);      //回调函数注册到 timer8 的中断函数里面
-
         TIMER_CREATE(&m_speed_pid_timer, false, true, speed_pid_timer_handler_r);     //循环定时器，立马执行
     }
 
@@ -632,11 +441,9 @@ int motor_ctrl_task_r(void)
             {
                 phase_pwm_stop();
 
-                g_app_param.is_speed_ring_start = false;            //参数恢复
                 g_app_param.curr_iq = 0.0f;
                 g_app_param.vf_curr_uq = 0.0f;
                 g_app_param.vf_curr_theta = 0.0f;
-                g_app_param.iq_acc_dir = ACC_DONE;
 
                 foc_algorithm_init();                               //FOC 算法参数初始化
 

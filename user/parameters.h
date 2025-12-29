@@ -72,8 +72,7 @@
 // 电机状态
 typedef enum
 {
-    MOTOR_STA_STOP,     //停止
-    MOTOR_STA_STARTING, //启动中
+    MOTOR_STA_STOP,         //停止
 
     MOTOR_STA_VF_START,     //vf启动中
     MOTOR_STA_VF_ACC,       //vf加速中
@@ -93,14 +92,6 @@ typedef enum
     MOTOR_DIR_CW,      //顺时针
     MOTOR_DIR_CCW,     //逆时针
 } motor_dir_e;
-
-typedef enum
-{
-    ACC_DONE,       //变速完成
-    ACC_UP,         //加速
-    ACC_DOWN,       //减速
-    ACC_START,      //开始加速
-} motor_acc_dir_e;
 
 typedef enum
 {
@@ -223,33 +214,24 @@ typedef enum {
 // 全局应用参数
 typedef struct
 {
-    uint8_t             slave_addr;         // modbus 从机地址
+    uint8_t         slave_addr;         // modbus 从机地址
+    motor_sta_e     motor_sta;          // 电机状态
+    motor_sta_e     pre_motor_sta;      // 电机前一状态
 
-    motor_sta_e         motor_sta;          // 电机状态
-    motor_sta_e         pre_motor_sta;      // 电机前一状态
+    motor_dir_e     motor_dir;          // 电机方向
+    motor_cmd_e     motor_cmd;          // 电机命令
+    motor_cmd_e     old_motor_cmd;      // 上一次电机命令
 
-    motor_dir_e         motor_dir;          // 电机方向
-    motor_cmd_e         motor_cmd;          // 电机命令
-    motor_cmd_e         old_motor_cmd;      // 上一次电机命令
-
-    float       target_speed_ring_s;    // 电机设定速度，单位： ring/s 圈/秒
-    float       curr_speed_ring_s;      // 电机当前速度，单位   ring/s 圈/秒
-
-    float       vf_target_uq;       // vf阶段目标Uq, q轴电压 单位V
-    float       target_iq;          // q轴电流 单位A
-
-    float       vf_curr_uq;         //  vf阶段当前Uq
-    float       curr_iq;            //  当前Iq
-    float       vf_curr_theta;      //  vf阶段当前角度值
-
-    float       vf_step_rad;        //  vf阶段， 步进角度，单位：弧度
-    float       ekf_step_ring_s;    //  EKF阶段 步进角度，单位：圈/秒
-
-
-    motor_acc_dir_e     iq_acc_dir;     // iq加速的方向,  0：iq达标  1：iq加速  2:iq减速 4:开始加速
-    bool        is_speed_ring_start;    // 速度环开始标记
-
-    uint64_t    evt_code;               // 事件代码
+    float           target_speed_ring_s;// 电机设定速度，单位： ring/s 圈/秒
+    float           curr_speed_ring_s;  // 电机当前速度，单位   ring/s 圈/秒
+    float           vf_target_uq;       // vf阶段目标Uq, q轴电压 单位V
+    float           target_iq;          // q轴电流 单位A
+    float           vf_curr_uq;         // vf阶段当前Uq
+    float           curr_iq;            // 当前Iq
+    float           vf_curr_theta;      // vf阶段当前角度值
+    float           vf_step_rad;        // vf阶段， 步进角度，单位：弧度
+    float           ekf_step_ring_s;    // EKF阶段 步进角度，单位：圈/秒
+    uint64_t        evt_code;           // 事件代码
 } app_param_t;
 
 extern app_param_t g_app_param;

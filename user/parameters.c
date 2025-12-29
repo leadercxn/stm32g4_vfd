@@ -18,9 +18,6 @@ app_param_t g_app_param = {
     .curr_iq = 0.0f,
     .vf_curr_theta = 0.0f,
 
-    .iq_acc_dir = ACC_DONE,
-    .is_speed_ring_start = false,
-
     .evt_code = 0,
 
     .vf_step_rad = 0.001f,

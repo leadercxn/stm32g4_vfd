@@ -277,13 +277,12 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 
         m_test_ticks++;
 
-//        if(g_app_param.motor_sta == MOTOR_STA_STARTING)     //电机在非停机状态下都要运行
+        //电机在非停机状态下都要运行
         if((g_app_param.motor_sta > MOTOR_STA_STOP) && (g_app_param.motor_sta < MOTOR_STA_ERROR))    
         {
             g_app_param.vf_curr_theta += g_app_param.vf_step_rad;
             g_app_param.vf_curr_theta = radian_normalize(g_app_param.vf_curr_theta);
-//            motor_vf_run();
-            motor_vf_run_r();
+            motor_vf_run();
         }
 
         gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 0);
