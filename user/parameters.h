@@ -85,7 +85,7 @@ typedef enum
     MOTOR_STA_EKF_DEC,      //ekf减速中
     MOTOR_STA_EKF_CONST,    //ekf恒速中
 
-    MOTOR_STA_ERROR,    //故障状态
+    MOTOR_STA_ERROR,    //故障状态,必停机
 } motor_sta_e;
 
 typedef enum
@@ -233,7 +233,7 @@ typedef struct
     motor_cmd_e         old_motor_cmd;      // 上一次电机命令
 
     float       target_speed_ring_s;    // 电机设定速度，单位： ring/s 圈/秒
-    float       curr_speed_rad_s;       // 电机当前速度，单位   rad/s  弧度/秒
+    float       curr_speed_ring_s;      // 电机当前速度，单位   ring/s 圈/秒
 
     float       vf_target_uq;       // vf阶段目标Uq, q轴电压 单位V
     float       target_iq;          // q轴电流 单位A

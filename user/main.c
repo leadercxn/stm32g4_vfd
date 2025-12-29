@@ -229,7 +229,7 @@ int main(void)
 
       sensors_task();         //传感器任务
 
-      motor_ctrl_task();      //电机控制任务
+      motor_ctrl_task_r();      //电机控制任务
 
       mb_slaver_task();       //modbus 从机任务
 
