@@ -38,10 +38,43 @@ float adc_sample_physical_value_get(adc_channel_e ch)
  */
 static void adc_reg_origin_data_to_phy_value(void)
 {
+    int     temp;
+    float   result = 0.0f;
+
+    /**
+     * 机箱体 电压关系 DSP_ADCB4 = box_t 传感器输出，直连
+     */
+
+    /**
+     * 基准电压 电压关系 DSP_ADCA0 = base_volt , 直连
+     */
+
+    /**
+     * 电阻分压式母线电压 电压关系 DSP_ADCA7 = 1/2 UBUS
+     *
+     */
+
+    /**
+     * 变压器母线电压（隔离式母线电压） 电压关系 DSP_ADCB2 = 1/2 VCC
+     *
+     */
+
+    /**
+     * IGBT温度 电压关系 DSP_ADCB0 = 1/2 PIM-T
+     *
+     */
+
+    /**
+     * 散热片温度 电压关系 DSP_ADCB1 =  3/5 JX1 (预留)
+     *
+     */
 
 } 
 
 
+/**
+ * @brief       adc 注入通道原始数据 转化为 对应的物理量
+ */
 static void adc_inj_data_to_physical_value(void)
 {
     int temp;
@@ -49,6 +82,8 @@ static void adc_inj_data_to_physical_value(void)
 
     /**
      * 经过自研开发板的电流采样电路
+     *
+     * 电压关系： DSP_ADCA2 = 3/4 * IU
      */
     // U_I
     temp = m_adc_inj_origin_data[0] - m_adc_i_offset_origin_data[0];
@@ -66,30 +101,6 @@ static void adc_inj_data_to_physical_value(void)
     temp = m_adc_inj_origin_data[2] - m_adc_i_offset_origin_data[2];
     result = temp * 0.008954f;
     m_adc_physical_value[ADC_CH_W_I] = result;
-
-
-// 直接接到adc IO
-#if 0
-    // U_I
-    temp = m_adc_inj_origin_data[0] - m_adc_i_offset_origin_data[0];
-
-    result = temp * (float)(3.3f / 4.0960f / 0.12f);
-    result *= 0.001f;
-    m_adc_physical_value[ADC_CH_U_I] = result;
-
-    // V_I
-    temp = m_adc_inj_origin_data[1] - m_adc_i_offset_origin_data[1];
-    result = temp * (float)(3.3f / 4.0960f / 0.12f);
-    result *= 0.001f;
-    m_adc_physical_value[ADC_CH_V_I] = result;
-
-    // W_I
-    temp = m_adc_inj_origin_data[2] - m_adc_i_offset_origin_data[2];
-    result = temp * (float)(3.3f / 4.0960f / 0.12f);
-    result *= 0.001f;
-    m_adc_physical_value[ADC_CH_W_I] = result;
-#endif
-
 }
 
 static uint16_t m_test_ticks = 0;
@@ -152,7 +163,7 @@ int sensors_task(void)
 
     static uint8_t  adc_collect_cnt = 0;
 
-#if 0
+#if 1
     if(IS_PRE_MINUS_MID_OVER_POST(sys_time_ms_get(), sens_collect_ticks, 100))   //间隔 100 ms
     {
         sens_collect_ticks = sys_time_ms_get();

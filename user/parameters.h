@@ -73,9 +73,6 @@
 typedef enum
 {
     MOTOR_STA_STOP,     //停止
-
-    MOTOR_STA_STOPPING, //停止中
-
     MOTOR_STA_STARTING, //启动中
 
     MOTOR_STA_VF_START,     //vf启动中

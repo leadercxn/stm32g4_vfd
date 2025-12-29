@@ -52,17 +52,17 @@
 
 //INPUT
 #define DSP_X1_STARTUP_PORT         GPIOB
-#define DSP_X1_STARTUP_PIN          GPIO_PIN_10    //启动信号输入
+#define DSP_X1_STARTUP_PIN          GPIO_PIN_10    //启动信号输入     -- 0启动， 1停止
 #define DSP_X2_RST_PORT             GPIOB
-#define DSP_X2_RST_PIN              GPIO_PIN_11    //复位信号输入
+#define DSP_X2_RST_PIN              GPIO_PIN_11    //复位信号输入     -- 0复位， 1正常
 #define DSP_IGBT_FLT_PORT           GPIOB
-#define DSP_IGBT_FLT_PIN            GPIO_PIN_12    //IGBT模块故障输入
+#define DSP_IGBT_FLT_PIN            GPIO_PIN_12    //IGBT模块故障输入 -- ACPL-332J芯片的 FAULT 引脚反馈， 0正常，1故障
 #define DSP_EB_WU_ERR_PORT          GPIOB
-#define DSP_EB_WU_ERR_PIN           GPIO_PIN_13    //WU相故障反馈输入
+#define DSP_EB_WU_ERR_PIN           GPIO_PIN_13    //WU相故障反馈输入 -- 0正常， 1故障
 #define DSP_EA_VU_ERR_PORT          GPIOB
-#define DSP_EA_VU_ERR_PIN           GPIO_PIN_14    //VU相故障反馈输入
+#define DSP_EA_VU_ERR_PIN           GPIO_PIN_14    //VU相故障反馈输入 -- 0正常， 1故障
 #define DSP_UVW_PHASE_LOSS_PORT     GPIOB
-#define DSP_UVW_PHASE_LOSS_PIN      GPIO_PIN_15    //UVW缺相故障输入
+#define DSP_UVW_PHASE_LOSS_PIN      GPIO_PIN_15    //UVW缺相故障输入  -- 0正常， 1故障
 
 //OUTPUT
 #define DSP_ERR_RELAY_PORT          GPIOB
