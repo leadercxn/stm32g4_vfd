@@ -70,9 +70,13 @@ void motor_vf_run(void)
 	TIM1->CCR2 = (uint16_t)(g_foc_output.tcmp2);
 	TIM1->CCR3 = (uint16_t)(g_foc_output.tcmp3);
 #else
-    if(g_app_param.motor_sta == MOTOR_STA_VF_START)             // vf启动
+    // 处于 VF 阶段
+    if(g_app_param.motor_sta < MOTOR_STA_EKF_START)
     {
-        pwm_start_cnt = 0;      //在每次启动的时候，都清0一次
+        if(g_app_param.motor_sta == MOTOR_STA_VF_START)             // vf启动
+        {
+            pwm_start_cnt = 0;      //在每次启动的时候，都清0一次
+        }
 
         if(g_app_param.vf_curr_uq < g_app_param.vf_target_uq)
         {
@@ -82,32 +86,30 @@ void motor_vf_run(void)
         {
             g_app_param.motor_sta = MOTOR_STA_VF_DEC;
         }
-    }
 
-    if(g_app_param.motor_sta == MOTOR_STA_VF_ACC)               //vf 加速
-    {
-        g_app_param.vf_curr_uq += 0.001f;  //步进
-        if(g_app_param.vf_curr_uq > g_app_param.vf_target_uq)
+        if(g_app_param.motor_sta == MOTOR_STA_VF_ACC)               //vf 加速
         {
-            g_app_param.vf_curr_uq = g_app_param.vf_target_uq;
-            g_app_param.motor_sta = MOTOR_STA_VF_CONST;
+            g_app_param.vf_curr_uq += 0.001f;  //步进
+            if(g_app_param.vf_curr_uq > g_app_param.vf_target_uq)
+            {
+                g_app_param.vf_curr_uq = g_app_param.vf_target_uq;
+                g_app_param.motor_sta = MOTOR_STA_VF_CONST;
+            }
         }
-    }
-    else if(g_app_param.motor_sta == MOTOR_STA_VF_DEC)          //vf 减速
-    {
-        g_app_param.vf_curr_uq -= 0.001f;  //步
-        if(g_app_param.vf_curr_uq < g_app_param.vf_target_uq)
+        else if(g_app_param.motor_sta == MOTOR_STA_VF_DEC)          //vf 减速
         {
-            g_app_param.vf_curr_uq = g_app_param.vf_target_uq;
-            g_app_param.motor_sta = MOTOR_STA_VF_CONST;
+            g_app_param.vf_curr_uq -= 0.001f;  //步
+            if(g_app_param.vf_curr_uq < g_app_param.vf_target_uq)
+            {
+                g_app_param.vf_curr_uq = g_app_param.vf_target_uq;
+                g_app_param.motor_sta = MOTOR_STA_VF_CONST;
+            }
         }
-    }
 
-    // 处于 VF 阶段
-    if(g_app_param.motor_sta < MOTOR_STA_EKF_START)
-    {
         g_foc_input.theta = g_app_param.vf_curr_theta;
         g_foc_input.iq_ref = g_app_param.vf_curr_uq;
+
+#if 1
         //检测速度是否达标速度闭环
         if( (g_foc_output.ekf[2] > 40.0f) || (g_foc_output.ekf[2] < -40.0f) )
         {
@@ -124,6 +126,7 @@ void motor_vf_run(void)
         {
             vf_start_cnt = 0;
         }
+#endif
     }
 
     // 处于 EKF 阶段
