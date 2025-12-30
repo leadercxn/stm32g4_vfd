@@ -205,6 +205,13 @@ typedef enum {
     EVT_V_UNDER_VOLT,       //V相欠压
 
     EVT_W_UNDER_VOLT,       //W相欠压
+    EVT_STARTUP_HW,         //启动硬件反馈
+    EVT_RESET_HW,           //复位硬件反馈
+    EVT_IGBT_FLT_HW,        //IGBT故障硬件反馈
+
+    EVT_EB_WU_ERR_HW,       //EB WU故障硬件反馈
+    EVT_EA_VU_ERR_HW,       //EA VU故障硬件反馈
+    EVT_UVW_PHASE_LOSS_HW,  //UVW缺相硬件反馈
 } sys_evt_e;
 
 
@@ -231,6 +238,8 @@ typedef struct
     float           vf_curr_theta;      // vf阶段当前角度值
     float           vf_step_rad;        // vf阶段， 步进角度，单位：弧度
     float           ekf_step_ring_s;    // EKF阶段 步进角度，单位：圈/秒
+
+    bool            ofset_curr_col_done;  // 电流采样偏置校准完成标志
     uint64_t        evt_code;           // 事件代码
 } app_param_t;
 

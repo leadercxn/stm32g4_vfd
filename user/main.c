@@ -193,6 +193,15 @@ int main(void)
   phase_pwm_start();
 
 //  apt_ekf_init();
+  gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 先关闭 光耦驱动
+  gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);  // 先断开 主回路继电器
+
+  gpio_output_set(PWM_UH_PORT, PWM_UH_PIN, 0);  // U 上桥关
+  gpio_output_set(PWM_UL_PORT, PWM_UL_PIN, 1);  // U 下桥开
+  gpio_output_set(PWM_VH_PORT, PWM_VH_PIN, 0);  // V 上桥关
+  gpio_output_set(PWM_VL_PORT, PWM_VL_PIN, 1);  // V 下桥开
+  gpio_output_set(PWM_WH_PORT, PWM_WH_PIN, 0);  // W 上桥关
+  gpio_output_set(PWM_WL_PORT, PWM_WL_PIN, 1);  // W 下桥开
 
   while (1)
   {
@@ -211,6 +220,8 @@ int main(void)
 
         gpio_output_set(DSP_LED_GREEN_PORT, DSP_LED_GREEN_PIN, led_stat);
 
+        gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 打开光耦驱动
+
 #ifdef DEBUG_SVPWM      // 测试 SVPWM 波形
         gt_vdq.vd = 0;                                         // D轴赋值
         gt_vdq.vq = 4.0f;                                      // Q轴赋值
@@ -222,9 +233,16 @@ int main(void)
         trace_debug("t_theta %.3f, sector %d, CCR1 %lu, CCR2 %lu, CCR3 %lu\r\n", \
           gt_theta, gt_sector, TIM1->CCR1, TIM1->CCR2, TIM1->CCR3);
 #endif
-
 //        sin_cal_speed_compare();
         trace_debug("evt code %#llx, time %ld s\r\n", g_app_param.evt_code, test_inter_ticks/1000);
+
+        trace_debug("IN: startup-%d, rst-%d, igbt-flt-%d, eb-wu-%d, ea-vu-%d, uvw-%d\r\n", 
+            gpio_input_get(DSP_X1_STARTUP_PORT, DSP_X1_STARTUP_PIN),
+            gpio_input_get(DSP_X2_RST_PORT, DSP_X2_RST_PIN),
+            gpio_input_get(DSP_IGBT_FLT_PORT, DSP_IGBT_FLT_PIN),
+            gpio_input_get(DSP_EB_WU_ERR_PORT, DSP_EB_WU_ERR_PIN),
+            gpio_input_get(DSP_EA_VU_ERR_PORT, DSP_EA_VU_ERR_PIN),
+            gpio_input_get(DSP_UVW_PHASE_LOSS_PORT, DSP_UVW_PHASE_LOSS_PIN) );
       }
 
       sensors_task();         //传感器任务

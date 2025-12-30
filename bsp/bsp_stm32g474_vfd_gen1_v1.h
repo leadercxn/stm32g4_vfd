@@ -56,7 +56,7 @@
 #define DSP_X2_RST_PORT             GPIOB
 #define DSP_X2_RST_PIN              GPIO_PIN_11    //复位信号输入     -- 0复位， 1正常
 #define DSP_IGBT_FLT_PORT           GPIOB
-#define DSP_IGBT_FLT_PIN            GPIO_PIN_12    //IGBT模块故障输入 -- ACPL-332J芯片的 FAULT 引脚反馈， 0正常，1故障
+#define DSP_IGBT_FLT_PIN            GPIO_PIN_12    //IGBT模块故障输入 --  0正常，1故障 -- ACPL-332J芯片的 FAULT 引脚反馈
 #define DSP_EB_WU_ERR_PORT          GPIOB
 #define DSP_EB_WU_ERR_PIN           GPIO_PIN_13    //WU相故障反馈输入 -- 0正常， 1故障
 #define DSP_EA_VU_ERR_PORT          GPIOB
@@ -74,9 +74,9 @@
 #define DSP_LED_ERR_PIN             GPIO_PIN_7      //LED故障指示灯
 
 #define DSP_RELAY_IGBT_PORT         GPIOE
-#define DSP_RELAY_IGBT_PIN          GPIO_PIN_4      //IGBT板上继电器控制输出 -- 13
+#define DSP_RELAY_IGBT_PIN          GPIO_PIN_4      //(1闭合， 0断开) IGBT板上继电器控制输出 【IGBT板主回路 N750V 继电器】 -- 13
 #define DSP_DRIVE_IGBT_PORT         GPIOE
-#define DSP_DRIVE_IGBT_PIN          GPIO_PIN_5      //IGBT驱动光耦电源信号, 硬件输出电平取反 -- 29
+#define DSP_DRIVE_IGBT_PIN          GPIO_PIN_5      //(1关电源， 0开电源) IGBT驱动光耦电源信号, 硬件输出电平取反 【IGBT板 IGBT驱动芯片的供电】 -- 29
 
 //ADC
 #define DSP_ADCB0_PIM_T_PORT        GPIOC

@@ -49,8 +49,6 @@ static float m_short_target_speed_ring_s = 0.0f;    //短暂的目标速度，�
  */
 static void timer1_irq_cb_handler(void)
 {
-    gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 0);
-
     adc3_inj_start();        //每一次中断触发一次电流采集 10K 的执行频率
 }
 
@@ -199,7 +197,7 @@ void motor_vf_run(void)
     if(pwm_start_cnt > 2)     // 等待3个PWM周期后，闭合IGBT，避免反相电路输出上电就是高电平，同时导通上下半桥
     {
         pwm_start_cnt = 0;
-        gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 1);
+        gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 0);  //打开 IGBT 光耦驱动
     }
 #endif  // DEBUG_SVPWM
 
@@ -438,7 +436,7 @@ int motor_ctrl_task(void)
     switch(g_app_param.motor_sta)
     {
         case MOTOR_STA_STOP:
-            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);
+            gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 关闭 IGBT光耦驱动
 
             if(g_app_param.motor_sta != g_app_param.pre_motor_sta)  //开始停机
             {
@@ -466,7 +464,7 @@ int motor_ctrl_task(void)
             break;
 
         case MOTOR_STA_ERROR:
-            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);
+            gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 关闭 IGBT光耦驱动
             break;
     }
 

@@ -80,6 +80,8 @@ static void adc_inj_data_to_physical_value(void)
     int temp;
     float   result = 0.0f;
 
+// 用正点原子的驱动电路板
+#if 0
     /**
      * 经过自研开发板的电流采样电路
      *
@@ -100,6 +102,28 @@ static void adc_inj_data_to_physical_value(void)
     // W_I
     temp = m_adc_inj_origin_data[2] - m_adc_i_offset_origin_data[2];
     result = temp * 0.008954f;
+    m_adc_physical_value[ADC_CH_W_I] = result;
+#endif
+
+    /**
+     * 经过 自研控制板的 电流采样 自研电机驱动板
+     *
+     * 电压关系： DSP_ADCA2 = 3/4 * IU
+     */
+    // U_I
+    temp = m_adc_inj_origin_data[0] - m_adc_i_offset_origin_data[0];
+    // 公式统一处理  ( adc * 3.30f / 4095.0f * 4.0f / 3.0f - 2.50f ) / 0.02f = (adc * 0.001074 - 2.50f) / 0.02f = adc * 0.053724 - 125.0f
+    result = temp * 0.053724f;
+    m_adc_physical_value[ADC_CH_U_I] = result;
+
+    // V_I
+    temp = m_adc_inj_origin_data[1] - m_adc_i_offset_origin_data[1];
+    result = temp * 0.053724f;
+    m_adc_physical_value[ADC_CH_V_I] = result;
+
+    // W_I
+    temp = m_adc_inj_origin_data[2] - m_adc_i_offset_origin_data[2];
+    result = temp * 0.053724f;
     m_adc_physical_value[ADC_CH_W_I] = result;
 }
 
@@ -146,6 +170,7 @@ int sensors_task(void)
                     m_adc_i_offset_origin_data[i] = offset_i_adc_total[i];    //保存静态电流偏移数据
                 }
 
+                g_app_param.ofset_curr_col_done = true;    //电流偏置采样完成标志
                 trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
             }
         }
@@ -286,6 +311,5 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         }
 
         gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 0);
-        gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);
     }
 }
