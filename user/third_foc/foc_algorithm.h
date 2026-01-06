@@ -117,6 +117,7 @@ extern current_dq_t   g_current_dq;
 extern void foc_algorithm_init(void);
 extern void foc_algorithm_step(void);
 void foc_algorithm_step_r(void);
+void i_pid_param_change(void);
 extern RT_MODEL *const rtM;
 
 

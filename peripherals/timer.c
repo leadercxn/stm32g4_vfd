@@ -27,7 +27,7 @@ static void pwm_io_init(void)
      *
     */
 
-#if 0
+#if 1
     gpio_init_struct.Pin       = PWM_UH_PIN | PWM_UL_PIN | PWM_VH_PIN | PWM_VL_PIN | PWM_WH_PIN | PWM_WL_PIN ;
     gpio_init_struct.Mode      = GPIO_MODE_AF_PP;
     gpio_init_struct.Pull      = GPIO_NOPULL;
@@ -35,7 +35,7 @@ static void pwm_io_init(void)
     gpio_init_struct.Alternate = GPIO_AF2_TIM1;
 #endif
 
-#if 1
+#if 0
     gpio_init_struct.Pin       = PWM_UH_PIN | PWM_UL_PIN | PWM_VH_PIN | PWM_VL_PIN | PWM_WH_PIN | PWM_WL_PIN ;
     gpio_init_struct.Mode      = GPIO_MODE_OUTPUT_PP;
     gpio_init_struct.Pull      = GPIO_NOPULL;

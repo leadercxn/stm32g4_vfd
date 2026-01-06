@@ -348,3 +348,17 @@ void foc_algorithm_init(void)
   g_foc_input.flux  = g_mb_ctrl_param.flux_link;
 }
 
+void i_pid_param_change(void)
+{
+  m_current_d_pid.p_gain      = g_mb_ctrl_param.i_pid_p;
+  m_current_d_pid.i_gain      = g_mb_ctrl_param.i_pid_i;
+  m_current_d_pid.b_gain      = g_mb_ctrl_param.i_pid_kb;
+  m_current_d_pid.max_output  = g_mb_ctrl_param.i_pid_limit;
+  m_current_d_pid.min_output  = -g_mb_ctrl_param.i_pid_limit;
+    
+  m_current_q_pid.p_gain      = g_mb_ctrl_param.i_pid_p;
+  m_current_q_pid.i_gain      = g_mb_ctrl_param.i_pid_i;
+  m_current_q_pid.b_gain      = g_mb_ctrl_param.i_pid_kb;
+  m_current_q_pid.max_output  = g_mb_ctrl_param.i_pid_limit;
+  m_current_q_pid.min_output  = -g_mb_ctrl_param.i_pid_limit;
+}

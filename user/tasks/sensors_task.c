@@ -12,14 +12,12 @@
 #include "motor_ctrl_task.h"
 #include "trace.h"
 
-#define ADC_I_OFFSET_SAMP_TIMES     50   //静态电流采样次数
+#define ADC_I_OFFSET_SAMP_TIMES     50                          //静态电流采样次数
 
-static uint16_t m_adc_average_data[ADC_CH_MAX] = {0};          //adc通道 采样平均数据
-
-static float    m_adc_physical_value[ADC_CH_MAX] = {0};        //adc采样物理量数据， 电压单位V, 电流单位A, 温度单位℃
-
-static uint32_t m_adc_i_offset_origin_data[3] = {0};  // 电流偏置adc采样原始数据 u,v,w
-static uint32_t m_adc_inj_origin_data[3] = {0};       // 注入通道采样原始数据 u,v,w
+static uint16_t m_adc_average_data[ADC_CH_MAX] = {0};           //adc通道 采样平均数据
+static float    m_adc_physical_value[ADC_CH_MAX] = {0};         //adc采样物理量数据， 电压单位V, 电流单位A, 温度单位℃
+static uint32_t m_adc_i_offset_origin_data[3] = {0};            // 电流偏置adc采样原始数据 u,v,w
+static uint32_t m_adc_inj_origin_data[3] = {0};                 // 注入通道采样原始数据 u,v,w
 
 
 float adc_sample_physical_value_get(adc_channel_e ch)
@@ -47,17 +45,26 @@ static void adc_reg_origin_data_to_phy_value(void)
 
     /**
      * 基准电压 电压关系 DSP_ADCA0 = base_volt , 直连
+     * 
+     * 公式统一处理 adc * 3.30f / 4095.0f = adc * 0.00080586f
      */
+    m_adc_physical_value[ADC_CH_BASE_VOLT] = m_adc_average_data[ADC_CH_BASE_VOLT] * 0.00080586f;
 
     /**
      * 电阻分压式母线电压 电压关系 DSP_ADCA7 = 1/2 UBUS
-     *
+     * 驱动板电压关系 P750V_VOLT * [75 / (75 + 360 + 6000)] = P750V_VOLT * 75 / 6435  = UBUS
+     * 
+     * 公式统一处理 adc * 3.30f / 4095.0f * 2.0f * 6435.0f / 75.0f = adc * 0.138286f
      */
+    m_adc_physical_value[ADC_CH_UBUS_VOLT] = m_adc_average_data[ADC_CH_UBUS_VOLT] * 0.138286f;
 
     /**
      * 变压器母线电压（隔离式母线电压） 电压关系 DSP_ADCB2 = 1/2 VCC
-     *
+     * 驱动板关系 VCC * 10 / (10 + 10 + 1) = adc / 4095 * 3.30f
+     * 
+     * 公式统一处理 adc * 3.30f / 4095.0f * 21.0f / 10.0f= adc * 0.001692f
      */
+    m_adc_physical_value[ADC_CH_VCC_VOLT] = m_adc_average_data[ADC_CH_VCC_VOLT] * 0.001692f;
 
     /**
      * IGBT温度 电压关系 DSP_ADCB0 = 1/2 PIM-T
@@ -171,7 +178,8 @@ int sensors_task(void)
                 }
 
                 g_app_param.ofset_curr_col_done = true;    //电流偏置采样完成标志
-                trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
+
+//                trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
             }
         }
     }
@@ -220,8 +228,10 @@ int sensors_task(void)
             base_volt_total   = 0;
             ubus_volt_total   = 0;
 
+            adc_reg_origin_data_to_phy_value();     //采样数据转换物理数据
+
 #if 0
-            trace_debug("1_ch6 %d, 1_ch7 %d, 1_ch8 %d, 1_ch9 %d, 3_ch7 %d, 3_ch11 %d, time %ld \r\n",
+            trace_debug("1_ch6 PIM_T %d, 1_ch7 RAD_T %d, 1_ch8 VCC_VOLT %d, 1_ch9 BOX_T %d, 3_ch7 BASE_VOLT %d, 3_ch11 UBUS_VOLT %d, time %ld \r\n",
                 m_adc_average_data[ADC_CH_PIM_T],
                 m_adc_average_data[ADC_CH_RAD_T],
                 m_adc_average_data[ADC_CH_VCC_VOLT],
@@ -231,25 +241,20 @@ int sensors_task(void)
                 sys_time_ms_get() );
 #endif
 
-#if 0
-            trace_debug("3_ch8 U %ld, 3_ch9 V %ld, 3_ch10 %ld \r\n",
-                m_adc_inj_origin_data[0],
-                m_adc_inj_origin_data[1],
-                m_adc_inj_origin_data[2] );
-
-//            float iu_volt = m_adc_inj_origin_data[0] * (float)(3.30f / 4.095f * 4.0f / 3.0f) * 0.001f;
-//            float iv_volt = m_adc_inj_origin_data[1] * (float)(3.30f / 4.095f * 4.0f / 3.0f) * 0.001f;
-//            float iw_volt = m_adc_inj_origin_data[2] * (float)(3.30f / 4.095f * 4.0f / 3.0f) * 0.001f;
-            float iu_volt = m_adc_inj_origin_data[0] * (float)(3.30f / 4.095f) * 0.001f;
-            float iv_volt = m_adc_inj_origin_data[1] * (float)(3.30f / 4.095f) * 0.001f;
-            float iw_volt = m_adc_inj_origin_data[2] * (float)(3.30f / 4.095f) * 0.001f;
-
-            trace_debug("3_ch8 U %.3fV, 3_ch9 V %.3fV, 3_ch10 %.3fV \r\n",
-                iu_volt, iv_volt, iw_volt );
+#if 1
+            trace_debug("PIM_T %.2f, RAD_T %.2f, VCC_VOLT %.2fV, BOX_T %.2f, BASE_VOLT %.2fV, UBUS_VOLT %.2fV, I-U %.2f, I-V %.2f, I-W %.2f\r\n",
+                m_adc_physical_value[ADC_CH_PIM_T],
+                m_adc_physical_value[ADC_CH_RAD_T],
+                m_adc_physical_value[ADC_CH_VCC_VOLT],
+                m_adc_physical_value[ADC_CH_BOX_T],
+                m_adc_physical_value[ADC_CH_BASE_VOLT],
+                m_adc_physical_value[ADC_CH_UBUS_VOLT],
+                m_adc_physical_value[ADC_CH_U_I],
+                m_adc_physical_value[ADC_CH_V_I],
+                m_adc_physical_value[ADC_CH_W_I] );
 #endif
+            
         }
-
-        adc_reg_origin_data_to_phy_value();     //采样数据转换物理数据
     }
 #endif
 
@@ -293,14 +298,16 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc->Instance == ADC3)
     {
-        gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 1);
-
         m_adc_inj_origin_data[0] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_1); //U电流
         m_adc_inj_origin_data[1] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_2); //V电流
         m_adc_inj_origin_data[2] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_3); //W电流
-        adc_inj_data_to_physical_value();
 
-        m_test_ticks++;
+        if(g_app_param.ofset_curr_col_done)
+        {
+            adc_inj_data_to_physical_value();
+        }
+
+//        m_test_ticks++;
 
         //电机在非停机状态下都要运行
         if((g_app_param.motor_sta > MOTOR_STA_STOP) && (g_app_param.motor_sta < MOTOR_STA_ERROR))    
@@ -309,7 +316,5 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
             g_app_param.vf_curr_theta = radian_normalize(g_app_param.vf_curr_theta);
             motor_vf_run();
         }
-
-        gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 0);
     }
 }

@@ -28,6 +28,11 @@ typedef enum
     CMD_TARGET_UQ,          //目标q轴电压
     CMD_VF_STEP_RAD_S,      //目标步进幅度
     CMD_DIR,                //方向
+
+    CMD_I_PID_P,            //电流环P参数
+    CMD_I_PID_I,            //电流环I参数
+    CMD_I_PID_KB,           //电流环Kb参数
+    CMD_I_PID_LIMIT,        //电流环的上限参数
 } uart_cmd_e;
 
 typedef union
@@ -107,7 +112,7 @@ void motor_vf_run(void)
         g_foc_input.theta = g_app_param.vf_curr_theta;
         g_foc_input.iq_ref = g_app_param.vf_curr_uq;
 
-#if 1
+#if 0
         //检测速度是否达标速度闭环
         if( (g_foc_output.ekf[2] > 40.0f) || (g_foc_output.ekf[2] < -40.0f) )
         {
@@ -181,7 +186,7 @@ void motor_vf_run(void)
         }
     }
 
-    g_foc_input.udc     = 24.0f;
+    g_foc_input.udc     = adc_sample_physical_value_get(ADC_CH_UBUS_VOLT);
     g_foc_input.ia      = adc_sample_physical_value_get(ADC_CH_U_I);
     g_foc_input.ib      = adc_sample_physical_value_get(ADC_CH_V_I);
     g_foc_input.ic      = adc_sample_physical_value_get(ADC_CH_W_I);
@@ -227,7 +232,7 @@ static void vofa_send(void)
     justfloat_update(g_foc_input.ic,    0);         //W相电流       -- 4
     justfloat_update(g_current_dq.iq,    0);        //当前Iq        -- 5
     justfloat_update(g_foc_input.iq_ref,    0);     //目标Iq        -- 6
-    justfloat_update(g_voltage_dq.vq,    0);        //实际的Vq      -- 7
+    justfloat_update(g_voltage_dq.vq,    0);        //实际的Vq,传入到svpwm计算 -- 7
     justfloat_update(g_app_param.vf_curr_theta,  1);   //强拖的角度     -- 9
 }
 
@@ -386,6 +391,30 @@ static void usart_ctrl_cmd_handler(void)
                         }
                     }
                     break;
+
+                case CMD_I_PID_P:
+                    g_mb_ctrl_param.i_pid_p = usart1_rx_data.data.fdate;
+
+                    trace_debug("i_pid_p = %.4f\r\n", usart1_rx_data.data.fdate);
+                    break;
+
+                case CMD_I_PID_I:
+                    g_mb_ctrl_param.i_pid_i = usart1_rx_data.data.fdate;
+
+                    trace_debug("i_pid_i = %.4f\r\n", usart1_rx_data.data.fdate);
+                    break;
+
+                case CMD_I_PID_KB:
+                    g_mb_ctrl_param.i_pid_kb = usart1_rx_data.data.fdate;
+
+                    trace_debug("i_pid_kb = %.4f\r\n", usart1_rx_data.data.fdate);
+                    break;
+
+                case CMD_I_PID_LIMIT:
+                    g_mb_ctrl_param.i_pid_limit = usart1_rx_data.data.fdate;
+
+                    trace_debug("i_pid_limit = %.4f\r\n", usart1_rx_data.data.fdate);
+                    break;
                 
                 default:
                     break;
@@ -401,6 +430,9 @@ int motor_ctrl_task(void)
 {
     static bool init_done = false;
 
+    static uint32_t motor_sta_err_ticks = 0;
+    static bool err_led_stat = false;
+
     if(!init_done)
     {
         init_done = true;
@@ -410,6 +442,7 @@ int motor_ctrl_task(void)
     }
 
     usart_ctrl_cmd_handler();    //串口控制命令处理
+    i_pid_param_change();        //电流环参数修改处理
 
     if(g_app_param.motor_cmd != g_app_param.old_motor_cmd)
     {
@@ -465,6 +498,22 @@ int motor_ctrl_task(void)
 
         case MOTOR_STA_ERROR:
             gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 关闭 IGBT光耦驱动
+
+            if(sys_time_ms_get() - motor_sta_err_ticks >= 100)
+            {
+                motor_sta_err_ticks = sys_time_ms_get();
+
+                if(err_led_stat)
+                {
+                    err_led_stat = false;
+                }
+                else
+                {
+                    err_led_stat = true;
+                }
+
+                gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, err_led_stat);
+            }
             break;
     }
 

@@ -193,15 +193,17 @@ int main(void)
   phase_pwm_start();
 
 //  apt_ekf_init();
-  gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 先关闭 光耦驱动
+  gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 1);
   gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);  // 先断开 主回路继电器
 
+#if 0
   gpio_output_set(PWM_UH_PORT, PWM_UH_PIN, 0);  // U 上桥关
   gpio_output_set(PWM_UL_PORT, PWM_UL_PIN, 1);  // U 下桥开
   gpio_output_set(PWM_VH_PORT, PWM_VH_PIN, 0);  // V 上桥关
   gpio_output_set(PWM_VL_PORT, PWM_VL_PIN, 1);  // V 下桥开
   gpio_output_set(PWM_WH_PORT, PWM_WH_PIN, 0);  // W 上桥关
   gpio_output_set(PWM_WL_PORT, PWM_WL_PIN, 1);  // W 下桥开
+#endif
 
   while (1)
   {
@@ -220,7 +222,7 @@ int main(void)
 
         gpio_output_set(DSP_LED_GREEN_PORT, DSP_LED_GREEN_PIN, led_stat);
 
-        gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 打开光耦驱动
+        gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 1);  // 闭合主回路继电器
 
 #ifdef DEBUG_SVPWM      // 测试 SVPWM 波形
         gt_vdq.vd = 0;                                         // D轴赋值

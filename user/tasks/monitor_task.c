@@ -14,9 +14,11 @@
 int monitor_task(void)
 {
     static uint32_t monitor_ticks = 0;
-
-
     float  temp_f = 0.0f;
+
+    static uint8_t u_i_over_curr_cnt = 0;
+    static uint8_t v_i_over_curr_cnt = 0;
+    static uint8_t w_i_over_curr_cnt = 0;
 
     if(IS_PRE_MINUS_MID_OVER_POST(sys_time_ms_get(), monitor_ticks, 10))   //间隔 10ms
     {
@@ -80,6 +82,65 @@ int monitor_task(void)
         else
         {
             CLR_BIT64(g_app_param.evt_code, EVT_UVW_PHASE_LOSS_HW);
+        }
+
+        // 三相电流过流检测
+        if(adc_sample_physical_value_get(ADC_CH_U_I) > 2.0f)
+        {
+            u_i_over_curr_cnt++;
+            if(u_i_over_curr_cnt >= 5)    // 连续3次过流
+            {
+                u_i_over_curr_cnt = 5;
+                SET_BIT64(g_app_param.evt_code, EVT_U_OVER_CURR);
+            }
+        }
+        else
+        {
+            u_i_over_curr_cnt = 0;
+
+            CLR_BIT64(g_app_param.evt_code, EVT_U_OVER_CURR);
+        }
+
+        if(adc_sample_physical_value_get(ADC_CH_V_I) > 2.0f)
+        {
+            v_i_over_curr_cnt++;
+            if(v_i_over_curr_cnt >= 5)    // 连续3次过流
+            {
+                v_i_over_curr_cnt = 5;
+                SET_BIT64(g_app_param.evt_code, EVT_V_OVER_CURR);
+            }
+        }
+        else
+        {
+            v_i_over_curr_cnt = 0;
+
+            CLR_BIT64(g_app_param.evt_code, EVT_V_OVER_CURR);
+        }
+
+        if(adc_sample_physical_value_get(ADC_CH_W_I) > 2.0f)
+        {
+            w_i_over_curr_cnt++;
+            if(w_i_over_curr_cnt >= 5)    // 连续3次过流
+            {
+                w_i_over_curr_cnt = 5;
+                SET_BIT64(g_app_param.evt_code, EVT_W_OVER_CURR);
+            }
+        }
+        else
+        {
+            w_i_over_curr_cnt = 0;
+
+            CLR_BIT64(g_app_param.evt_code, EVT_W_OVER_CURR);
+        }
+
+
+
+        if( IS_SET64(g_app_param.evt_code, EVT_IGBT_FLT_HW) || \
+            IS_SET64(g_app_param.evt_code, EVT_U_OVER_CURR) || \
+            IS_SET64(g_app_param.evt_code, EVT_V_OVER_CURR) || \
+            IS_SET64(g_app_param.evt_code, EVT_W_OVER_CURR) )
+        {
+            g_app_param.motor_sta = MOTOR_STA_ERROR;
         }
     }
 

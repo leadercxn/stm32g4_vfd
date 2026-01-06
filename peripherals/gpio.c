@@ -44,8 +44,6 @@ int bsp_gpio_init(void)
     gpio_init_struct.Speed   = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &gpio_init_struct);
 
-    gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 1);  //关闭 ERR LED
-
     return 0;
 }
 

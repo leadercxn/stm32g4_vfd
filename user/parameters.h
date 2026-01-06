@@ -39,9 +39,9 @@
 #define MOTOR_FLUXLINK      0.0090969f  //电机磁链常数
 
 //程序设定参数
-#define MOTOR_SPEED_MAX_RPM     4000  //电机最高转速
-#define MOTOR_SPEED_MIN_RPM     100   //电机最小速度
-#define VBUS_VLOT               24.0f //母线电压，单位V
+#define MOTOR_SPEED_MAX_RPM     4000    //电机最高转速
+#define MOTOR_SPEED_MIN_RPM     100     //电机最小速度
+#define VBUS_VLOT               560.0f  //母线电压，单位V
 
 //FOC参数
 #define FOC_PERIOD              0.0001f     //FOC运行的时间间隔
@@ -58,9 +58,16 @@
 #define SPEED_PI_UP_LIMIT   6.0f
 
 // Q轴电流环默认参数
+#if 0
 #define Q_PI_P              3.199f
 #define Q_PI_I              2282.8f
 #define Q_PI_KB             15.0f
+#define Q_PI_LOW_LIMIT      -10.0f
+#define Q_PI_UP_LIMIT       10.0f
+#endif
+#define Q_PI_P              1.199f
+#define Q_PI_I              1000.0f
+#define Q_PI_KB             5.0f
 #define Q_PI_LOW_LIMIT      -10.0f
 #define Q_PI_UP_LIMIT       10.0f
 
@@ -209,9 +216,14 @@ typedef enum {
     EVT_RESET_HW,           //复位硬件反馈
     EVT_IGBT_FLT_HW,        //IGBT故障硬件反馈
 
-    EVT_EB_WU_ERR_HW,       //EB WU故障硬件反馈
-    EVT_EA_VU_ERR_HW,       //EA VU故障硬件反馈
-    EVT_UVW_PHASE_LOSS_HW,  //UVW缺相硬件反馈
+    EVT_EB_WU_ERR_HW,       //EB  WU故障硬件反馈
+    EVT_EA_VU_ERR_HW,       //EA  VU故障硬件反馈
+    EVT_UVW_PHASE_LOSS_HW,  //UVW 缺相硬件反馈
+    EVT_U_OVER_CURR,        //U相过流
+
+    EVT_V_OVER_CURR,        //V相过流
+    EVT_W_OVER_CURR,        //W相过流
+
 } sys_evt_e;
 
 

@@ -11,7 +11,7 @@ app_param_t g_app_param = {
 
     .target_speed_ring_s    = 20.0f,
 
-    .vf_target_uq = 0.95f,
+    .vf_target_uq = 1.0f,
     .target_iq = 0.5f,
 
     .vf_curr_uq = 0.0f,
