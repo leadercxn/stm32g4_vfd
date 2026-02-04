@@ -18,9 +18,9 @@ float radian_normalize(float radian)
 {
     float a;
 
-	a = fmod(radian, DOUBLE_PI);
+	a = fmod(radian, TWO_PI);
 	
-	return (a >= 0) ? a : (a + DOUBLE_PI);
+	return (a >= 0) ? a : (a + TWO_PI);
 }
 
 void pi_cal(pi_cal_t *sptr, float error)

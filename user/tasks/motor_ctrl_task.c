@@ -24,8 +24,8 @@ typedef enum
 {
     CMD_SW = 1,             //开关
     CMD_TARGET_SPEED,       //目标速度
-    CMD_TARGET_IQ,          //目标d轴电流
-    CMD_TARGET_UQ,          //目标q轴电压
+    CMD_TARGET_IQ,          //目标q 轴电流
+    CMD_TARGET_UQ,          //目标q 轴电压
     CMD_VF_STEP_RAD_S,      //目标步进幅度
     CMD_DIR,                //方向
 
@@ -33,6 +33,9 @@ typedef enum
     CMD_I_PID_I,            //电流环I参数
     CMD_I_PID_KB,           //电流环Kb参数
     CMD_I_PID_LIMIT,        //电流环的上限参数
+
+    CMD_TARGET_UD,          //目标d 轴电压
+    CMD_VF_RATIO,           //vf电压比率
 } uart_cmd_e;
 
 typedef union
@@ -47,7 +50,7 @@ typedef struct
     float_uint32_u  data;
 } __attribute__((__packed__ )) uart_cmd_t;
 
-static float m_short_target_speed_ring_s = 0.0f;    //短暂的目标速度，用来做EKF的加减速目标速度
+static float m_short_target_speed_ring_s = 2.0f;    //短暂的目标速度，用来做的加减速目标速度
 
 /**
  * timer1 CCH4 中断回调函数 10KHz的执行频率
@@ -58,12 +61,14 @@ static void timer1_irq_cb_handler(void)
 }
 
 /**
- * 电机vf运行, 100us 的执行频率
+ * 电机vf运行, 在adc中断回调中执行 100us 执行间隔
  */
 void motor_vf_run(void)
 {
     static uint8_t  pwm_start_cnt = 0;
     static uint16_t vf_start_cnt = 0;
+
+    static uint16_t vf_acc_dec_step_cnt = 0;
     static uint16_t ekf_acc_dec_step_cnt = 0;
 
 #ifdef DEBUG_SVPWM      // 测试 SVPWM
@@ -73,33 +78,19 @@ void motor_vf_run(void)
 	TIM1->CCR2 = (uint16_t)(g_foc_output.tcmp2);
 	TIM1->CCR3 = (uint16_t)(g_foc_output.tcmp3);
 #else
+
     // 处于 VF 阶段
     if(g_app_param.motor_sta < MOTOR_STA_EKF_START)
     {
-        if(g_app_param.motor_sta == MOTOR_STA_VF_START)             // vf启动
-        {
-            pwm_start_cnt = 0;      //在每次启动的时候，都清0一次
-        }
-
         if(g_app_param.vf_curr_uq < g_app_param.vf_target_uq)
-        {
-            g_app_param.motor_sta = MOTOR_STA_VF_ACC;
-        }
-        else
-        {
-            g_app_param.motor_sta = MOTOR_STA_VF_DEC;
-        }
-
-        if(g_app_param.motor_sta == MOTOR_STA_VF_ACC)               //vf 加速
         {
             g_app_param.vf_curr_uq += 0.001f;  //步进
             if(g_app_param.vf_curr_uq > g_app_param.vf_target_uq)
             {
                 g_app_param.vf_curr_uq = g_app_param.vf_target_uq;
-                g_app_param.motor_sta = MOTOR_STA_VF_CONST;
             }
         }
-        else if(g_app_param.motor_sta == MOTOR_STA_VF_DEC)          //vf 减速
+        else if(g_app_param.vf_curr_uq > g_app_param.vf_target_uq)
         {
             g_app_param.vf_curr_uq -= 0.001f;  //步
             if(g_app_param.vf_curr_uq < g_app_param.vf_target_uq)
@@ -109,11 +100,56 @@ void motor_vf_run(void)
             }
         }
 
-        g_foc_input.theta = g_app_param.vf_curr_theta;
+        vf_acc_dec_step_cnt++;
+        if(vf_acc_dec_step_cnt >= 5000)        //每 500ms 计算一次速度
+        {
+            vf_acc_dec_step_cnt = 0;
+
+            g_app_param.curr_speed_ring_s = RAD_2_RING_PER_S(g_app_param.vf_step_rad);  // vf步进弧度换算速度
+
+            if(g_app_param.curr_speed_ring_s <= (g_app_param.target_speed_ring_s - 1.0f))
+            {
+                g_app_param.motor_sta =  MOTOR_STA_VF_ACC;
+            }
+            else if(g_app_param.curr_speed_ring_s >= (g_app_param.target_speed_ring_s + 1.0f))
+            {
+                g_app_param.motor_sta =  MOTOR_STA_VF_DEC;
+            }
+            else
+            {
+                g_app_param.motor_sta =  MOTOR_STA_VF_CONST;
+            }
+
+            if(g_app_param.motor_sta ==  MOTOR_STA_VF_ACC)         //vf 加速
+            {
+                m_short_target_speed_ring_s += g_app_param.step_ring_s;
+                if(m_short_target_speed_ring_s > g_app_param.target_speed_ring_s)
+                {
+                    m_short_target_speed_ring_s = g_app_param.target_speed_ring_s;
+                }
+
+                g_app_param.vf_step_rad = RING_PER_S_2_RAD(m_short_target_speed_ring_s);            // 设置 频率
+
+            }
+            else if(g_app_param.motor_sta ==  MOTOR_STA_VF_DEC)    //vf 减速
+            {
+                m_short_target_speed_ring_s -= g_app_param.step_ring_s;
+                if(m_short_target_speed_ring_s < g_app_param.target_speed_ring_s)
+                {
+                    m_short_target_speed_ring_s = g_app_param.target_speed_ring_s;
+                }
+
+                g_app_param.vf_step_rad = RING_PER_S_2_RAD(m_short_target_speed_ring_s);
+            }
+
+            g_app_param.vf_target_uq = m_short_target_speed_ring_s * g_app_param.vf_ratio;   // 设置 Uq限幅
+        }
+
+        g_foc_input.theta  = g_app_param.vf_curr_theta;
         g_foc_input.iq_ref = g_app_param.vf_curr_uq;
 
+//检测速度是否达标速度闭环
 #if 0
-        //检测速度是否达标速度闭环
         if( (g_foc_output.ekf[2] > 40.0f) || (g_foc_output.ekf[2] < -40.0f) )
         {
             vf_start_cnt++;
@@ -130,6 +166,7 @@ void motor_vf_run(void)
             vf_start_cnt = 0;
         }
 #endif
+
     }
 
     // 处于 EKF 阶段
@@ -139,7 +176,8 @@ void motor_vf_run(void)
         g_foc_input.theta            = g_foc_output.ekf[3];          //使用卡尔曼估算角度
         g_foc_input.iq_ref           = g_speed_pid_out;              //使用速度环的输出值作为目标Iq
 
-        g_app_param.curr_speed_ring_s = g_foc_output.ekf[2] / DOUBLE_PI;    //使用卡尔曼估算的角速度， 单位：圈/秒
+#if 0
+        g_app_param.curr_speed_ring_s = g_foc_output.ekf[2] * ONE_DIV_TWO_PI;    //使用卡尔曼估算的角速度， 单位：圈/秒
 
         if(g_app_param.curr_speed_ring_s < (g_app_param.target_speed_ring_s - 1))
         {
@@ -163,7 +201,7 @@ void motor_vf_run(void)
             {
                 ekf_acc_dec_step_cnt = 0;
 
-                m_short_target_speed_ring_s += g_app_param.ekf_step_ring_s;
+                m_short_target_speed_ring_s += g_app_param.step_ring_s;
                 if(m_short_target_speed_ring_s > g_app_param.target_speed_ring_s)
                 {
                     m_short_target_speed_ring_s = g_app_param.target_speed_ring_s;
@@ -177,13 +215,53 @@ void motor_vf_run(void)
             {
                 ekf_acc_dec_step_cnt = 0;
 
-                m_short_target_speed_ring_s -= g_app_param.ekf_step_ring_s;
+                m_short_target_speed_ring_s -= g_app_param.step_ring_s;
                 if(m_short_target_speed_ring_s < g_app_param.target_speed_ring_s)
                 {
                     m_short_target_speed_ring_s = g_app_param.target_speed_ring_s;
                 }
             }
         }
+#endif
+
+        ekf_acc_dec_step_cnt++;
+        if(ekf_acc_dec_step_cnt >= 5000)        //每 500ms 步进一次
+        {
+            ekf_acc_dec_step_cnt = 0;
+
+            g_app_param.curr_speed_ring_s = g_foc_output.ekf[2] * ONE_DIV_TWO_PI;    //使用卡尔曼估算的角速度， 单位：圈/秒
+
+            if(g_app_param.curr_speed_ring_s < (g_app_param.target_speed_ring_s - 1))
+            {
+                g_app_param.motor_sta =  MOTOR_STA_EKF_ACC;
+            }
+            else if(g_app_param.curr_speed_ring_s > (g_app_param.target_speed_ring_s + 1))
+            {
+                g_app_param.motor_sta =  MOTOR_STA_EKF_DEC;
+            }
+            else
+            {
+                g_app_param.motor_sta =  MOTOR_STA_EKF_CONST;
+            }
+
+            if(g_app_param.motor_sta ==  MOTOR_STA_EKF_ACC)         //ekf 加速
+            {
+                m_short_target_speed_ring_s += g_app_param.step_ring_s;
+                if(m_short_target_speed_ring_s > g_app_param.target_speed_ring_s)
+                {
+                    m_short_target_speed_ring_s = g_app_param.target_speed_ring_s;
+                }
+            }
+            else if(g_app_param.motor_sta ==  MOTOR_STA_EKF_DEC)    //ekf 减速
+            {
+                m_short_target_speed_ring_s -= g_app_param.step_ring_s;
+                if(m_short_target_speed_ring_s < g_app_param.target_speed_ring_s)
+                {
+                    m_short_target_speed_ring_s = g_app_param.target_speed_ring_s;
+                }
+            }
+        }
+
     }
 
     g_foc_input.udc     = adc_sample_physical_value_get(ADC_CH_UBUS_VOLT);
@@ -213,27 +291,29 @@ void motor_vf_run(void)
  */
 static void vofa_send(void)
 {
-#if 0
-    justfloat_update(g_foc_output.ekf[3], 0);       //卡尔曼估算角度 -- 0
-    justfloat_update(g_foc_output.ekf[2], 0);       //卡尔曼估算速度 -- 1
-    justfloat_update(g_pll.theta, 0);               //SMO估算角度   -- 2
-    justfloat_update(g_pll.we,    0);               //SMO角速度     -- 3
-    justfloat_update(g_current_dq.iq,    0);        //当前Iq        -- 4
-    justfloat_update(g_foc_input.iq_ref,    0);     //目标Iq        -- 5
-    justfloat_update(g_voltage_dq.vq,    0);        //实际的Vq      -- 6
-    justfloat_update(g_app_param.target_speed_ring_s,    0);    //目标speed     -- 7
-    justfloat_update(g_app_param.vf_curr_theta,  1);            //强拖的角度     -- 8
-#endif
+    float temp = 0.0f;
 
-    justfloat_update(g_foc_output.ekf[3], 0);       //卡尔曼估算角度 -- 0
-    justfloat_update(g_foc_output.ekf[2], 0);       //卡尔曼估算速度 -- 1
-    justfloat_update(g_foc_input.ia,    0);         //U相电流       -- 2
-    justfloat_update(g_foc_input.ib,    0);         //V相电流       -- 3
-    justfloat_update(g_foc_input.ic,    0);         //W相电流       -- 4
-    justfloat_update(g_current_dq.iq,    0);        //当前Iq        -- 5
-    justfloat_update(g_foc_input.iq_ref,    0);     //目标Iq        -- 6
-    justfloat_update(g_voltage_dq.vq,    0);        //实际的Vq,传入到svpwm计算 -- 7
-    justfloat_update(g_app_param.vf_curr_theta,  1);   //强拖的角度     -- 9
+    if(g_app_param.curr_speed_ring_s != 0.0f)
+    {
+        temp = g_voltage_dq.vq / g_app_param.curr_speed_ring_s;
+    }
+
+    justfloat_update(g_foc_output.ekf[3], 0);           //卡尔曼估算角度 -- 0
+    justfloat_update(g_foc_output.ekf[2], 0);           //卡尔曼估算速度 -- 1
+    justfloat_update(g_foc_input.ia,    0);             //U相电流       -- 2
+    justfloat_update(g_foc_input.ib,    0);             //V相电流       -- 3
+    justfloat_update(g_foc_input.ic,    0);             //W相电流       -- 4
+    justfloat_update(g_current_dq.iq,    0);            //当前Iq        -- 5
+    justfloat_update(g_foc_input.iq_ref,    0);         //目标Iq        -- 6
+    justfloat_update(g_voltage_dq.vd,    0);            //实际的vd,传入到svpwm计算 -- 7
+    justfloat_update(g_voltage_dq.vq,    0);            //实际的Vq,传入到svpwm计算 -- 8
+    justfloat_update(g_app_param.u_rms_curr,    0);     //U相均方根电流     -- 9
+    justfloat_update(g_app_param.v_rms_curr,    0);     //V相均方根电流     -- 10
+    justfloat_update(g_app_param.w_rms_curr,    0);     //W相均方根电流     -- 11
+    justfloat_update(g_app_param.curr_speed_ring_s, 0); //电机当前速度      -- 12
+    justfloat_update(g_app_param.vf_curr_theta,  0);    //强拖的角度        -- 13
+    justfloat_update(g_app_param.vf_step_rad,  0);      //vf步幅           -- 14
+    justfloat_update(temp,  1);                         //实际的 V/F 比    -- 15
 }
 
 /**
@@ -248,7 +328,7 @@ static void speed_pid_timer_handler_r(void *p_data)
 static void usart_ctrl_cmd_handler(void)
 {
     //串口控制命令处理
-    uart_cmd_t  usart1_rx_data;
+    uart_cmd_t  usart1_rx_data;     // usart1_rx_data.data.fdate 从上位机传过来数据都是正数，不论是否浮点
     uint8_t     usart1_rx_len = 0;
 
     usart1_rx_len = usart1_rx( (uint8_t *)&usart1_rx_data );
@@ -261,94 +341,67 @@ static void usart_ctrl_cmd_handler(void)
         {
             switch (usart1_rx_data.cmd)
             {
-                case CMD_SW:
-                    if(usart1_rx_data.data.udata == 0x0)                //关机控件
+                case CMD_SW:                    //开关机
+                    if(usart1_rx_data.data.udata == 0x0)
                     {
                         g_app_param.motor_cmd   = MOTOR_CMD_STOP;
                         trace_debug("motor stop\r\n");
                     }
-                    else if(usart1_rx_data.data.udata == 0x3F800000)    //开机控件
+                    else if(usart1_rx_data.data.udata == 0x3F800000)
                     {
                         g_app_param.motor_cmd   = MOTOR_CMD_STARTUP;
                         trace_debug("motor start\r\n");
                     }
                     break;
 
-                case CMD_TARGET_SPEED:
-                        if(g_app_param.motor_dir == MOTOR_DIR_CCW)  //逆
+                case CMD_TARGET_SPEED:          //目标速度
+                        if((usart1_rx_data.data.fdate <= MOTOR_SPEED_RING_S_MAX) && (usart1_rx_data.data.fdate >= MOTOR_SPEED_RING_S_MIN))
                         {
-                            if(usart1_rx_data.data.fdate < 0.0f)
+                            if(g_app_param.motor_dir == MOTOR_DIR_CW)  //顺
                             {
                                 usart1_rx_data.data.fdate = -usart1_rx_data.data.fdate;
                             }
-                        }
-                        else                                        //顺
-                        {
-                            if(usart1_rx_data.data.fdate > 0.0f)
-                            {
-                                usart1_rx_data.data.fdate = -usart1_rx_data.data.fdate;
-                            }
-                        }
 
-                        g_app_param.target_speed_ring_s = usart1_rx_data.data.fdate;
+                            g_app_param.target_speed_ring_s = usart1_rx_data.data.fdate;
 
-                        trace_debug("target speed %.4f\r\n", usart1_rx_data.data.fdate);
+                            trace_debug("target speed %.4f\r\n", usart1_rx_data.data.fdate);
+                        }
                     break;
 
-                case CMD_TARGET_IQ:
-                        if(g_app_param.motor_dir == MOTOR_DIR_CCW)  //逆
+                case CMD_TARGET_IQ:             //目标q轴电流
+                        if(usart1_rx_data.data.fdate < 10.0f)
                         {
-                            if(usart1_rx_data.data.fdate < 0.0f)
+                            if(g_app_param.motor_dir == MOTOR_DIR_CW)  //顺
                             {
                                 usart1_rx_data.data.fdate = -usart1_rx_data.data.fdate;
                             }
-                        }
-                        else                                        //顺
-                        {
-                            if(usart1_rx_data.data.fdate > 0.0f)
-                            {
-                                usart1_rx_data.data.fdate = -usart1_rx_data.data.fdate;
-                            }
-                        }
 
-                        g_app_param.target_iq = usart1_rx_data.data.fdate;
-                        if((g_app_param.target_iq > 6.0f) || (g_app_param.target_iq < -6.0f))
-                        {
-                            g_app_param.target_iq = 0.0f;
+                            g_app_param.target_iq = usart1_rx_data.data.fdate;
+                            trace_debug("target Iq %.4f\r\n", usart1_rx_data.data.fdate);
                         }
-
-                        trace_debug("target Iq %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
-                case CMD_TARGET_UQ:
+                case CMD_TARGET_UQ:             //目标q轴电压
                         g_app_param.vf_target_uq  = usart1_rx_data.data.fdate;
 
                         trace_debug("target Uq %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
-                case CMD_VF_STEP_RAD_S:
-                        if(g_app_param.motor_dir == MOTOR_DIR_CCW)  //逆
+                case CMD_VF_STEP_RAD_S:         //VF步进弧度
+#if 0
+                        if(g_app_param.motor_dir == MOTOR_DIR_CW)  //顺
                         {
-                            if(usart1_rx_data.data.fdate < 0.0f)
-                            {
-                                usart1_rx_data.data.fdate = -usart1_rx_data.data.fdate;
-                            }
-                        }
-                        else                                        //顺
-                        {
-                            if(usart1_rx_data.data.fdate > 0.0f)
-                            {
-                                usart1_rx_data.data.fdate = -usart1_rx_data.data.fdate;
-                            }
+                            usart1_rx_data.data.fdate = -usart1_rx_data.data.fdate;
                         }
 
                         g_app_param.vf_step_rad = usart1_rx_data.data.fdate;
 
                         trace_debug("target step angle %.4f\r\n", usart1_rx_data.data.fdate);
+#endif
                     break;
 
-                case CMD_DIR:
-                    if(usart1_rx_data.data.udata == 0x0)                //控件数据
+                case CMD_DIR:                   //方向
+                    if(usart1_rx_data.data.udata == 0x0)                //逆
                     {
                         g_app_param.motor_dir = MOTOR_DIR_CCW;
                         trace_debug("dir cw\r\n");
@@ -369,7 +422,7 @@ static void usart_ctrl_cmd_handler(void)
                             g_app_param.vf_step_rad = -g_app_param.vf_step_rad;
                         }
                     }
-                    else if(usart1_rx_data.data.udata == 0x3F800000)    //控件数据
+                    else if(usart1_rx_data.data.udata == 0x3F800000)    //顺
                     {
                         g_app_param.motor_dir = MOTOR_DIR_CW;
                         trace_debug("dir ccw\r\n");
@@ -392,28 +445,43 @@ static void usart_ctrl_cmd_handler(void)
                     }
                     break;
 
-                case CMD_I_PID_P:
+                case CMD_I_PID_P:                                       //电流环P参数
                     g_mb_ctrl_param.i_pid_p = usart1_rx_data.data.fdate;
 
                     trace_debug("i_pid_p = %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
-                case CMD_I_PID_I:
+                case CMD_I_PID_I:                                       //电流环I参数
                     g_mb_ctrl_param.i_pid_i = usart1_rx_data.data.fdate;
 
                     trace_debug("i_pid_i = %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
-                case CMD_I_PID_KB:
+                case CMD_I_PID_KB:                                      //电流环Kb参数
                     g_mb_ctrl_param.i_pid_kb = usart1_rx_data.data.fdate;
 
                     trace_debug("i_pid_kb = %.4f\r\n", usart1_rx_data.data.fdate);
                     break;
 
-                case CMD_I_PID_LIMIT:
+                case CMD_I_PID_LIMIT:                                   //电流环的上限参数
                     g_mb_ctrl_param.i_pid_limit = usart1_rx_data.data.fdate;
 
                     trace_debug("i_pid_limit = %.4f\r\n", usart1_rx_data.data.fdate);
+                    break;
+
+                case CMD_TARGET_UD:             //目标d轴电压
+                        g_app_param.vf_target_ud  = usart1_rx_data.data.fdate;
+
+                        trace_debug("target Ud %.4f\r\n", usart1_rx_data.data.fdate);
+                    break;
+
+                case CMD_VF_RATIO:              //VF 比率
+                        if((usart1_rx_data.data.fdate <= VF_RATIO_MAX) && (usart1_rx_data.data.fdate >= VF_RATIO_MIN))
+                        {
+                            g_app_param.vf_ratio = usart1_rx_data.data.fdate;
+
+                            trace_debug("vf ratio %.4f\r\n", usart1_rx_data.data.fdate);
+                        }
                     break;
                 
                 default:
@@ -478,6 +546,7 @@ int motor_ctrl_task(void)
                 g_app_param.curr_iq = 0.0f;
                 g_app_param.vf_curr_uq = 0.0f;
                 g_app_param.vf_curr_theta = 0.0f;
+                g_app_param.curr_speed_ring_s = 0.0f;
 
                 foc_algorithm_init();                               //FOC 算法参数初始化
 
@@ -498,6 +567,21 @@ int motor_ctrl_task(void)
 
         case MOTOR_STA_ERROR:
             gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 关闭 IGBT光耦驱动
+
+            if(g_app_param.motor_sta != g_app_param.pre_motor_sta)  //开始停机
+            {
+                phase_pwm_stop();
+
+                g_app_param.curr_iq = 0.0f;
+                g_app_param.vf_curr_uq = 0.0f;
+                g_app_param.vf_curr_theta = 0.0f;
+
+
+
+                foc_algorithm_init();                               //FOC 算法参数初始化
+
+                TIMER_STOP(m_speed_pid_timer);
+            }
 
             if(sys_time_ms_get() - motor_sta_err_ticks >= 100)
             {

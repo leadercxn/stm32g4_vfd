@@ -119,7 +119,7 @@ int timer1_init(void)
     __HAL_TIM_DISABLE_OCxPRELOAD(&m_timer1_handle, TIM_CHANNEL_3);
 
     oc_cfg.Pulse = (PWM_PERIOD - 10);                          //用来触发 adc 采集电流
-//    oc_cfg.Pulse = 10;                                           //用来触发 adc 采集电流 -- 因为硬件做了取反
+//    oc_cfg.Pulse = 10;                                       //用来触发 adc 采集电流 -- 因为硬件做了取反
     if (HAL_TIM_PWM_ConfigChannel(&m_timer1_handle, &oc_cfg, TIM_CHANNEL_4) != HAL_OK)
     {
         Error_Handler();
@@ -156,12 +156,15 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
   {
         __HAL_RCC_TIM1_CLK_ENABLE();
 
+//        HAL_NVIC_SetPriority(TIM1_UP_TIM16_IRQn, 1, 1);
+//        HAL_NVIC_EnableIRQ(TIM1_UP_TIM16_IRQn);
+
         HAL_NVIC_SetPriority(TIM1_CC_IRQn, 1, 0);
         HAL_NVIC_EnableIRQ(TIM1_CC_IRQn);
   }
 }
 
-//TIM1 的 Update更新中断
+//TIM1 的 Update更新中断  50Us
 void TIM1_UP_TIM16_IRQHandler(void)
 {
     HAL_TIM_IRQHandler(&m_timer1_handle);
@@ -169,7 +172,7 @@ void TIM1_UP_TIM16_IRQHandler(void)
     //自定义
 }
 
-//TIM1 的 CC Capture Compare 中断
+//TIM1 的 CC Capture Compare 中断  100us
 void TIM1_CC_IRQHandler(void)
 {
     HAL_TIM_IRQHandler(&m_timer1_handle);

@@ -162,6 +162,50 @@ void SetMultipleRegister(uint16_t startAddress, uint16_t quantity, uint16_t *reg
     }
 }
 
+/**
+ * @brief 设置hmi事件
+ *
+ * @param [in]  event        hmi事件枚举
+ */
+void hmi_event_set(sys_evtcode_mask_e event)
+{
+    if(event > (16 * 8))
+    {
+        return;
+    }
+
+    SET_BIT64(g_app_param.evt_code, event);    //设置系统错误码
+}
+
+/**
+ * @brief 消除hmi事件
+ *
+ * @param [in]  event        hmi事件枚举
+ */
+void hmi_event_clear(sys_evtcode_mask_e event)
+{
+    if(event > (16 * 8))
+    {
+        return;
+    }
+
+    CLR_BIT64(g_app_param.evt_code, event);    //清除系统错误码
+}
+
+/**
+ * 检测HMI事件
+ */
+bool hmi_event_get(sys_evtcode_mask_e event)
+{
+    if(event > (16 * 8))
+    {
+        return false;
+    }
+
+    return IS_SET64(g_app_param.evt_code, event) ? 1 : 0;    //获取系统错误码
+}
+
+
 static void sys_update_2_reg(void)
 {
     float    temp_f = 0.0f;
@@ -200,8 +244,8 @@ static void sys_update_2_reg(void)
     memcpy((uint8_t *)&mb_reg[REG_FLUX_LINK_L16],   (uint8_t *)&g_mb_ctrl_param.flux_link, 4);
 
     //速度
-    memcpy((uint8_t *)&mb_reg[REG_SPEED_MAX_L16],    (uint8_t *)&g_mb_ctrl_param.speed_max, 4);
-    memcpy((uint8_t *)&mb_reg[REG_SPEED_MIN_L16],    (uint8_t *)&g_mb_ctrl_param.speed_min, 4);
+//    memcpy((uint8_t *)&mb_reg[REG_SPEED_MAX_L16],    (uint8_t *)&g_mb_ctrl_param.speed_max, 4);
+//    memcpy((uint8_t *)&mb_reg[REG_SPEED_MIN_L16],    (uint8_t *)&g_mb_ctrl_param.speed_min, 4);
 
     //过流，过压阈值
     memcpy((uint8_t *)&mb_reg[REG_I_ERR_TH_L16],     (uint8_t *)&g_mb_ctrl_param.i_err_th, 4);
@@ -227,7 +271,7 @@ static void sys_update_2_reg(void)
     temp_u16 = (uint16_t) (temp_f * 1000);
     mb_reg[REG_W_CURR] = temp_u16;
 
-    temp_u16 = (uint16_t) (g_foc_output.ekf[2] / DOUBLE_PI * 60);  // 当前速度 r/min
+    temp_u16 = (uint16_t) (g_foc_output.ekf[2] / TWO_PI * 60);  // 当前速度 r/min
     mb_reg[REG_CURR_SPEED] = temp_u16;
 
     temp_u16 = (uint16_t) (g_foc_output.ekf[3] * 100);
@@ -268,7 +312,6 @@ static void reg_update_2_sys(void)
             g_app_param.slave_addr = mb_reg[REG_MB_ADDR];
         }
     }
-
 }
 
 

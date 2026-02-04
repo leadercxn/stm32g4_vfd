@@ -234,8 +234,17 @@ void foc_algorithm_step(void)
   angle_to_cos_sin(g_foc_input.theta, &m_transf_cos_sin);                                   //由角度计算 park变换和 反park变换的 COS SIN值
   park_transf(m_current_alpha_beta, m_transf_cos_sin, &g_current_dq);                       //Park变换，由Ialpha Ibeta 与角度信息，去计算Id Iq  // 由交流信息转化为直流信息，方便PID控制 
 
+// 采用电流环控制 Ud， Uq
+#if 0
 	current_pid_calc(g_foc_input.id_ref, g_current_dq.id, &g_voltage_dq.vd, &m_current_d_pid); //D轴电流环PID  根据电流参考与电流反馈去计算 输出电压
   current_pid_calc(g_foc_input.iq_ref, g_current_dq.iq, &g_voltage_dq.vq, &m_current_q_pid); //Q轴电流环PID  根据电流参考与电流反馈去计算 输出电压
+#endif
+
+// 直接 VF控制
+#if 1
+  g_voltage_dq.vd = g_app_param.vf_target_ud;
+  g_voltage_dq.vq = g_app_param.vf_curr_uq;     //g_app_param.vf_target_uq;
+#endif
 
   rev_park_transf(g_voltage_dq, m_transf_cos_sin, &m_volt_alpha_beta);                     //反park变换  通过电流环得到的dq轴电压信息结合角度信息，去把直流信息转化为交流信息用于SVPWM的输入
 
@@ -266,7 +275,7 @@ void foc_algorithm_step_r(void)
 
   rev_park_transf(gt_vdq, gt_cos_sin, &gt_v_alpha_beta);                     //反park变换  通过电流环得到的dq轴电压信息结合角度信息，去把直流信息转化为交流信息用于SVPWM的输入
 
-  svpwm_calc(gt_v_alpha_beta, 23.0f, g_foc_input.tpwm);       //SVPWM 计算模块
+  svpwm_calc(gt_v_alpha_beta, 23.0f, g_foc_input.tpwm);                     //SVPWM 计算模块
 }
 
 void foc_algorithm_init(void)

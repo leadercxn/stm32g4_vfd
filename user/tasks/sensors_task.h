@@ -3,10 +3,10 @@
 
 typedef enum
 {
-    ADC_CH_PIM_T,
-    ADC_CH_RAD_T,
+    ADC_CH_PIM_T,           // IGBT 模块自带的温度传感器
+    ADC_CH_RAD_T,           // 另外需要安装在铝块散热片上的温度传感器
     ADC_CH_VCC_VOLT,
-    ADC_CH_BOX_T,
+    ADC_CH_CTL_BSP_T,       // 控制板载温度传感器
 
     ADC_CH_BASE_VOLT,
     ADC_CH_U_I,

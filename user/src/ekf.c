@@ -471,9 +471,9 @@ _RAM_FUNC void apt_ekf_update(const float *u, float *xd)
 	P0_3_3 =   P_pred_3_3 - (temp_3_0*P_pred_0_3 + temp_3_1*P_pred_1_3 + temp_3_2*P_pred_2_3 + temp_3_3*P_pred_3_3);
 
     //输出角度限幅，2Π
-	if(tempa_3_0 > DOUBLE_PI)   
+	if(tempa_3_0 > TWO_PI)   
 	{
-		tempa_3_0 -= DOUBLE_PI;  
+		tempa_3_0 -= TWO_PI;  
 	}
 	xd[0] = tempa_0_0;   //ialpha
 	xd[1] = tempa_1_0;   //ibeta

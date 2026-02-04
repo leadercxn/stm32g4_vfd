@@ -46,9 +46,6 @@ static void param_init(void)
     g_mb_ctrl_param.phase_ls     = MOTOR_PHASE_LS;    //相电感
     g_mb_ctrl_param.flux_link    = MOTOR_FLUXLINK;    //磁链
 
-    g_mb_ctrl_param.speed_max    = MOTOR_SPEED_MAX_RPM;
-    g_mb_ctrl_param.speed_min    = MOTOR_SPEED_MIN_RPM;
-
     g_mb_ctrl_param.i_err_th          = 10.0f;            //过流阈值
     g_mb_ctrl_param.v_err_th          = VBUS_VLOT * 1.2f; //过压阈值
 
@@ -123,7 +120,6 @@ int main(void)
   spi1_init();    //SPI1 初始化
 
 //w25q flash 测试
-
   w25nxx_reset(&g_w25nxx_dev);
 
   w25nxx_jedec_id_read(&g_w25nxx_dev, &w25n_id);
@@ -186,24 +182,26 @@ int main(void)
 
   TIMER_INIT();   // 调度定时器初始化，用于简单的ms级定时器调度
 
-  trace_info("\r\n STM32G474 FOC Test Start \r\n\r\n")
+  trace_info("\r\n STM32G474 FOC Test Start \r\n\r\n");
+
+// float 类型绝对值测试
+#if 0
+  float test_iu = 2.3456f;
+  float test_iv = -1.2345f;
+
+  float fabs_value = 0.0f;
+  fabs_value = fabsf(test_iu);
+  trace_debug("test_iu %.4f, fabs %.4f\r\n", test_iu, fabs_value);
+  fabs_value = fabsf(test_iv);
+  trace_debug("test_iv %.4f, fabs %.4f\r\n", test_iv, fabs_value);
+#endif
 
   param_init();   //参数初始化
 
   phase_pwm_start();
 
-//  apt_ekf_init();
   gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 1);
   gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);  // 先断开 主回路继电器
-
-#if 0
-  gpio_output_set(PWM_UH_PORT, PWM_UH_PIN, 0);  // U 上桥关
-  gpio_output_set(PWM_UL_PORT, PWM_UL_PIN, 1);  // U 下桥开
-  gpio_output_set(PWM_VH_PORT, PWM_VH_PIN, 0);  // V 上桥关
-  gpio_output_set(PWM_VL_PORT, PWM_VL_PIN, 1);  // V 下桥开
-  gpio_output_set(PWM_WH_PORT, PWM_WH_PIN, 0);  // W 上桥关
-  gpio_output_set(PWM_WL_PORT, PWM_WL_PIN, 1);  // W 下桥开
-#endif
 
   while (1)
   {

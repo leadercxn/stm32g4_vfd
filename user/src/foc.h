@@ -9,14 +9,15 @@
 #define SQRT_3_DIV_3            0.57735026919f  //√3 / 3
 #define DOUBLE_SQRT_3_DIV_3     1.15470053838f  //2 * √3 / 3
 
-#define PI                      3.14159265359f  //圆周率
+#define PI                      3.14159265359f  // 圆周率
 #define PI_DIV_3                1.04719755120f  //PI / 3                
 #define PI_DIV_2                1.57079632679f  //PI / 2
 #define PI_DIV_4                0.78539816339f  //PI / 4
 #define PI_DIV_5                0.62831853072f  //PI / 5
 #define PI_DIV_6                0.52359877560f  //PI / 6
-#define DOUBLE_PI               6.28318530718f  //2 * PI
+#define TWO_PI                  6.28318530718f  //2 * PI
 #define ONE_DIV_PI              0.31830988618f  //1 / PI
+#define ONE_DIV_TWO_PI          0.15915494309f  //1 / (2 * PI)
 
 typedef struct
 {

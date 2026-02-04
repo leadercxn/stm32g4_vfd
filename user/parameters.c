@@ -9,21 +9,28 @@ app_param_t g_app_param = {
     .pre_motor_sta = MOTOR_STA_STOP,
     .motor_dir = MOTOR_DIR_CCW,
 
-    .target_speed_ring_s    = 20.0f,
+    .target_speed_ring_s = 2.0f,
 
-    .vf_target_uq = 1.0f,
+    .vf_target_uq = 10.0f,
+    .vf_target_ud = 0.0f,
     .target_iq = 0.5f,
 
     .vf_curr_uq = 0.0f,
     .curr_iq = 0.0f,
     .vf_curr_theta = 0.0f,
+    .vf_step_rad = 0.001f,
+    .step_ring_s = 1.0f,
+    .vf_ratio = 1.5f,
 
-    .ofset_curr_col_done = false,
+    .u_rms_curr = 0.0f,
+    .v_rms_curr = 0.0f,
+    .w_rms_curr = 0.0f,
+
+    .step_curr_th  = IGBT_STEP_CURR_TH,
+    .over_curr_th  = IGBT_OVERCURR_TH,
+    .limit_curr_th = IGBT_LIMIT_CURR_TH,
 
     .evt_code = 0,
-
-    .vf_step_rad = 0.001f,
-    .ekf_step_ring_s = 1.0f,
 };
 
 mb_ctrl_param_t g_mb_ctrl_param;

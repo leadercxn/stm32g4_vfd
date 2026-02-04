@@ -88,14 +88,14 @@ void pll_control(float e_alfa, float e_beta, pll_struct_t *pll)
 	//角速度积分->角度
 	pll->compensation_theta+= pll->we * FOC_PERIOD;
 
-	if(pll->compensation_theta > DOUBLE_PI)
+	if(pll->compensation_theta > TWO_PI)
 	{
-	  pll->compensation_theta -= DOUBLE_PI;
+	  pll->compensation_theta -= TWO_PI;
 	}
 
 	if(pll->compensation_theta < 0.0f)
 	{
-	   pll->compensation_theta += DOUBLE_PI;
+	   pll->compensation_theta += TWO_PI;
 	}
 
 	pll->theta  =  pll->compensation_theta;
@@ -104,21 +104,20 @@ void pll_control(float e_alfa, float e_beta, pll_struct_t *pll)
 	iir_filter(pll->we ,&pll->we, &g_pll_iir_lpf_par);
 
 	//电机反转补偿π
-	if((pll->we < -10.0f) && (g_app_param.target_speed_ring_s < 0.0f))
+	if((pll->we < -10.0f) && (g_app_param.motor_dir == MOTOR_DIR_CW))
 	{
 		pll->theta += PI;
 
-		if(pll->theta > DOUBLE_PI)
+		if(pll->theta > TWO_PI)
 		{
-			pll->theta -= DOUBLE_PI;
+			pll->theta -= TWO_PI;
 		}
 
 		if(pll->theta < 0.0f)
 		{
-			pll->theta += DOUBLE_PI;
+			pll->theta += TWO_PI;
 		}
 	}
-
 }
 
 void smo_pll_param_init(smo_struct_t *smo, pll_struct_t *pll)

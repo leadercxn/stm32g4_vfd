@@ -28,24 +28,25 @@
 
 //电机参数
 #define MOTOR_POLE_PAIRS    2           //电机极对数
-
-//#define MOTOR_PHASE_RES     0.4f        //电机相电阻，单位欧姆
-//#define MOTOR_PHASE_LS      0.0008f     //电机相电感，单位亨利
-//#define MOTOR_FLUXLINK      0.01623f    //电机磁链常数
-
-// 别人demo参数
 #define MOTOR_PHASE_RES     0.2f        //电机相电阻，单位欧姆
 #define MOTOR_PHASE_LS      0.0004f     //电机相电感，单位亨利
 #define MOTOR_FLUXLINK      0.0090969f  //电机磁链常数
 
 //程序设定参数
-#define MOTOR_SPEED_MAX_RPM     4000    //电机最高转速
-#define MOTOR_SPEED_MIN_RPM     100     //电机最小速度
 #define VBUS_VLOT               560.0f  //母线电压，单位V
+#define MOTOR_SPEED_RING_S_MAX  100.0f  //电机最高转速, ring/s
+#define MOTOR_SPEED_RING_S_MIN  2.0f    //电机最小速度
 
 //FOC参数
-#define FOC_PERIOD              0.0001f     //FOC运行的时间间隔
-#define SPEED_LOOP_CLOSE_RAD_S  20.0f       //速度环切入闭环的速度  单位: rad/s
+#define FOC_PERIOD                  0.0001f     //FOC运行的时间间隔 s
+#define FOC_FREQ                    10000       // (1.0f / FOC_PERIOD) FOC运行的频率 Hz
+#define SPEED_LOOP_CLOSE_RAD_S      20.0f       //速度环切入闭环的速度  单位: rad/s
+#define ONE_DIV_TWO_PI_FOC_PERIOD   1591.5494f  // 1 / (TWO_PI * FOC_PERIOD),设置为常数，计算更快
+#define VF_RATIO_MIN                1.20f      //V/F 最小 VF 比率
+#define VF_RATIO_MAX                3.50f      //V/F 最大 VF 比率
+
+#define RING_PER_S_2_RAD(rings)      (float)((rings) * TWO_PI * FOC_PERIOD)         //圈/秒 -> 弧度/周期
+#define RAD_2_RING_PER_S(rads)       (float)((rads) * ONE_DIV_TWO_PI_FOC_PERIOD)    //弧度/周期 -> 圈/秒
 
 /**
  * 算法参数
@@ -74,7 +75,12 @@
 /**
  * 板载硬件配置
  */
-#define AT24CXX_DEV_ADDR    0xA0    //AT24CXX 器件地址
+#define AT24CXX_DEV_ADDR        0xA0        //AT24CXX 器件地址
+
+#define IGBT_STEP_CURR_TH       80.0f       //IGBT 阶跃电流阈值, 单位A
+#define IGBT_OVERCURR_TH        50.0f       //IGBT 过流保护电流阈值, 单位A
+#define IGBT_LIMIT_CURR_TH      30.0f       //IGBT 限流保护电流阈值, 单位A
+
 
 // 电机状态
 typedef enum
@@ -184,47 +190,51 @@ typedef enum
     REG_MAX = 128,
 } mb_reg_e;
 
-// 显示故障bit排位 L -> H
+/**
+ * 显示故障bit排位 L -> H
+ * 
+ * ERR  代表故障类事件，需停机处理
+ * WARN 代表警告类事件，可记录但不影响运行
+ * EVT  代表一般类事件，可记录但不影响运行
+ */ 
 typedef enum {
-    EVT_I_SHORT,            //短路
-    EVT_OVER_CUR,           //过流
-    EVT_MB_OVER_VOLT,       //直流母线过压
-    EVT_MB_UNDER_VOLT,      //直流母线欠压
-
-    EVT_TEMP_SENS_ERR,      //温度传感器故障
-    EVT_RAD_OVER_TEMP,      //散热片过温
-    EVT_ROTOR_ABNORMAL,     //转子异常(堵转)
-    EVT_INPUT_PHASE_LOSS,   //输入 缺相
-
-    EVT_OUTPUT_PHASE_LOSS,  //输出 缺相
-    EVT_OVER_CUR_REDU_FREQ, //过流降频
-    EVT_LIMIT_FREQ,         //限频
-    EVT_IPM_ERR,            //IPM 模块故障 (IGBT模块)
-
-    EVT_STARTUP_FAIL,       //启动失败
-    EVT_BOX_OVER_TEMP,      //机箱过温
-    EVT_IGBT_OVER_TEMP,     //IGBT过温
-    EVT_OUT_OVER_VOLT,      //输出过压
-
-    EVT_OUT_UNDER_VOLT,     //输出欠压
-    EVT_OTHER_FAULT,        //其他故障
-    EVT_U_UNDER_VOLT,       //U相欠压
-    EVT_V_UNDER_VOLT,       //V相欠压
-
-    EVT_W_UNDER_VOLT,       //W相欠压
-    EVT_STARTUP_HW,         //启动硬件反馈
-    EVT_RESET_HW,           //复位硬件反馈
-    EVT_IGBT_FLT_HW,        //IGBT故障硬件反馈
-
-    EVT_EB_WU_ERR_HW,       //EB  WU故障硬件反馈
-    EVT_EA_VU_ERR_HW,       //EA  VU故障硬件反馈
-    EVT_UVW_PHASE_LOSS_HW,  //UVW 缺相硬件反馈
-    EVT_U_OVER_CURR,        //U相过流
-
-    EVT_V_OVER_CURR,        //V相过流
-    EVT_W_OVER_CURR,        //W相过流
-
-} sys_evt_e;
+//ERR 类事件
+    ERR_MB_OVER_VOLT,           //直流母线过压
+    ERR_MB_UNDER_VOLT,          //直流母线欠压
+    ERR_U_CURR_SENS,            //U相电流传感器故障
+    ERR_V_CURR_SENS,            //V相电流传感器故障
+    ERR_W_CURR_SENS,            //W相电流传感器故障
+    ERR_ROTOR_ABNORMAL,         //转子异常(堵转)
+    ERR_STARTUP_FAIL,           //启动失败
+    ERR_PIM_T_OVER,             //PIM   过温故障
+    ERR_RAD_T_OVER,             //散热片 过温故障
+    ERR_IGBT_FLT_HW,            //IGBT故障硬件反馈
+    ERR_UVW_IN_PHASE_LOSS_HW,   //UVW 输入缺相硬件反馈
+    ERR_U_OVER_CURR,            //U相过流          -- 均值电流过大
+    ERR_V_OVER_CURR,            //V相过流
+    ERR_W_OVER_CURR,            //W相过流
+    ERR_U_STEP_CURR,            //U相阶跃电流超限  -- 阶跃瞬间电流过大
+    ERR_V_STEP_CURR,            //V相阶跃电流超限
+    ERR_W_STEP_CURR,            //W相阶跃电流超限
+    ERR_U_OUT_PHASE_LOSS,       //U相输出缺相
+    ERR_V_OUT_PHASE_LOSS,       //V相输出缺相
+    ERR_W_OUT_PHASE_LOSS,       //W相输出缺相
+//WARN 类事件
+    WARN_PIM_T_HIGH,            //PIM 高温警告
+    WARN_RAD_T_HIGH,            //散热片 高温警告
+    WARN_BOX_T_HIGH,            //控制板载 高温警告
+    WARN_U_CURR_LIMIT,          //U相限流警告     -- 超过限频电流值，降频处理
+    WARN_V_CURR_LIMIT,          //V相限流警告
+    WARN_W_CURR_LIMIT,          //W相限流警告
+    WARN_EB_WU_HW,              //EB WU硬件反馈
+    WARN_EA_VU_HW,              //EA VU硬件反馈
+    WARN_BOX_TSENS_ERR,         //控制板载温度传感器故障
+    WARN_PIM_TSENS_ERR,         //PIM 温度传感器故障
+    WARN_RAD_TSENS_ERR,         //IGBT散热片 温度传感器故障
+//EVT 类事件
+    EVT_STARTUP_HW,             //启动硬件反馈
+    EVT_RESET_HW,               //复位硬件反馈
+} sys_evtcode_mask_e;
 
 
 
@@ -234,24 +244,34 @@ typedef enum {
 typedef struct
 {
     uint8_t         slave_addr;         // modbus 从机地址
+
     motor_sta_e     motor_sta;          // 电机状态
     motor_sta_e     pre_motor_sta;      // 电机前一状态
-
     motor_dir_e     motor_dir;          // 电机方向
     motor_cmd_e     motor_cmd;          // 电机命令
     motor_cmd_e     old_motor_cmd;      // 上一次电机命令
 
-    float           target_speed_ring_s;// 电机设定速度，单位： ring/s 圈/秒
+    float           target_speed_ring_s;   // 电机设定速度，单位： ring/s 圈/秒
+//运行参数
     float           curr_speed_ring_s;  // 电机当前速度，单位   ring/s 圈/秒
     float           vf_target_uq;       // vf阶段目标Uq, q轴电压 单位V
+    float           vf_target_ud;       // vf阶段目标Ud, d轴电压 单位V
     float           target_iq;          // q轴电流 单位A
     float           vf_curr_uq;         // vf阶段当前Uq
     float           curr_iq;            // 当前Iq
     float           vf_curr_theta;      // vf阶段当前角度值
     float           vf_step_rad;        // vf阶段， 步进角度，单位：弧度
-    float           ekf_step_ring_s;    // EKF阶段 步进角度，单位：圈/秒
+    float           step_ring_s;        // 步进加速度，单位：圈/秒
+    float           vf_ratio;           // vf比例系数
 
-    bool            ofset_curr_col_done;  // 电流采样偏置校准完成标志
+    float           u_rms_curr;         // U相均方根电流，单位A
+    float           v_rms_curr;         // V相均方根电流，单位A
+    float           w_rms_curr;         // W相均方根电流，单位A
+// 阈值
+    float           step_curr_th;       // 阶跃电流阈值
+    float           over_curr_th;       // 过流保护阈值
+    float           limit_curr_th;      // 限流保护阈值
+
     uint64_t        evt_code;           // 事件代码
 } app_param_t;
 
@@ -276,9 +296,6 @@ typedef struct
     float    phase_rs;           // 相电阻
     float    phase_ls;           // 相电感
     float    flux_link;          // 磁链
-
-    float    speed_max;          // 最大速度 1 = 1 RPM
-    float    speed_min;          // 最小速度 1 = 1 RPM
 
     float    i_err_th;           // 母线过流阈值
     float    v_err_th;           // 母线过压阈值

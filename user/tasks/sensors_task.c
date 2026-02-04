@@ -10,15 +10,88 @@
 #include "parameters.h"
 #include "sensors_task.h"
 #include "motor_ctrl_task.h"
+#include "monitor_task.h"
 #include "trace.h"
 
-#define ADC_I_OFFSET_SAMP_TIMES     50                          //静态电流采样次数
+#define ADC_I_OFFSET_SAMP_TIMES     50                          // 静态电流采样次数
 
-static uint16_t m_adc_average_data[ADC_CH_MAX] = {0};           //adc通道 采样平均数据
-static float    m_adc_physical_value[ADC_CH_MAX] = {0};         //adc采样物理量数据， 电压单位V, 电流单位A, 温度单位℃
+static uint16_t m_adc_average_data[ADC_CH_MAX] = {0};           // adc通道 采样平均数据
+static float    m_adc_physical_value[ADC_CH_MAX] = {0};         // adc采样物理量数据， 电压单位V, 电流单位A, 温度单位℃
 static uint32_t m_adc_i_offset_origin_data[3] = {0};            // 电流偏置adc采样原始数据 u,v,w
 static uint32_t m_adc_inj_origin_data[3] = {0};                 // 注入通道采样原始数据 u,v,w
 
+static bool m_adc_i_offset_cal_done = false;                    // 电流偏置校准完成标志
+
+
+static uint16_t m_rms_curr_req_samp_cnt = 0;                    // 均方根要采样的次数
+/**
+ * @brief 计算输出UVW三相的 RMS 均方根
+ */
+static void adc_uvw_rms_curr_cal()
+{
+    static float m_u_rms_curr_total = 0.0f;             // 统计平方和
+    static float m_v_rms_curr_total = 0.0f;
+    static float m_w_rms_curr_total = 0.0f;
+    
+    static uint16_t m_old_rms_curr_req_samp_cnt = 0;    //上次设置的要采样的次数
+    static uint16_t m_u_rms_curr_samp_cnt = 0;          //已经采样的次数
+    static uint16_t m_v_rms_curr_samp_cnt = 0;
+    static uint16_t m_w_rms_curr_samp_cnt = 0;
+
+    if((m_rms_curr_req_samp_cnt == m_old_rms_curr_req_samp_cnt) && (m_rms_curr_req_samp_cnt > 0))  //频率没有变化，继续统计 且 采样要求次数大于0
+    {
+        // U
+        m_u_rms_curr_total += (m_adc_physical_value[ADC_CH_U_I] * m_adc_physical_value[ADC_CH_U_I]);
+        m_u_rms_curr_samp_cnt++;
+        if(m_u_rms_curr_samp_cnt >= m_rms_curr_req_samp_cnt)    //采样完成
+        {
+            float rms_value = sqrtf(m_u_rms_curr_total / m_u_rms_curr_samp_cnt);
+            g_app_param.u_rms_curr = rms_value;
+
+            // 重置统计数据
+            m_u_rms_curr_total = 0.0f;
+            m_u_rms_curr_samp_cnt = 0;
+        }
+
+        // V
+        m_v_rms_curr_total += (m_adc_physical_value[ADC_CH_V_I] * m_adc_physical_value[ADC_CH_V_I]);
+        m_v_rms_curr_samp_cnt++;
+        if(m_v_rms_curr_samp_cnt >= m_rms_curr_req_samp_cnt)    //采样完成
+        {
+            float rms_value = sqrtf(m_v_rms_curr_total / m_v_rms_curr_samp_cnt);
+            g_app_param.v_rms_curr = rms_value;
+
+            // 重置统计数据
+            m_v_rms_curr_total = 0.0f;
+            m_v_rms_curr_samp_cnt = 0;
+        }
+
+        // W
+        m_w_rms_curr_total += (m_adc_physical_value[ADC_CH_W_I] * m_adc_physical_value[ADC_CH_W_I]);
+        m_w_rms_curr_samp_cnt++;
+        if(m_w_rms_curr_samp_cnt >= m_rms_curr_req_samp_cnt)    //采样完成
+        {
+            float rms_value = sqrtf(m_w_rms_curr_total / m_w_rms_curr_samp_cnt);
+            g_app_param.w_rms_curr = rms_value;
+
+            // 重置统计数据
+            m_w_rms_curr_total = 0.0f;
+            m_w_rms_curr_samp_cnt = 0;
+        }
+    }
+    else                                                        //频率发生变化，重新清0
+    {
+        // 重置统计数据
+        m_u_rms_curr_total = 0.0f;
+        m_v_rms_curr_total = 0.0f;
+        m_w_rms_curr_total = 0.0f;
+        m_u_rms_curr_samp_cnt = 0;
+        m_v_rms_curr_samp_cnt = 0;
+        m_w_rms_curr_samp_cnt = 0;
+
+        m_old_rms_curr_req_samp_cnt = m_rms_curr_req_samp_cnt;
+    }
+}
 
 float adc_sample_physical_value_get(adc_channel_e ch)
 {
@@ -87,31 +160,6 @@ static void adc_inj_data_to_physical_value(void)
     int temp;
     float   result = 0.0f;
 
-// 用正点原子的驱动电路板
-#if 0
-    /**
-     * 经过自研开发板的电流采样电路
-     *
-     * 电压关系： DSP_ADCA2 = 3/4 * IU
-     */
-    // U_I
-    temp = m_adc_inj_origin_data[0] - m_adc_i_offset_origin_data[0];
-    // 公式统一处理  3.30f / 4095.0f * 4.0f / 3.0f / 0.12f = 0.008954
-    result = temp * 0.008954f;
-
-    m_adc_physical_value[ADC_CH_U_I] = result;
-
-    // V_I
-    temp = m_adc_inj_origin_data[1] - m_adc_i_offset_origin_data[1];
-    result = temp * 0.008954f;
-    m_adc_physical_value[ADC_CH_V_I] = result;
-
-    // W_I
-    temp = m_adc_inj_origin_data[2] - m_adc_i_offset_origin_data[2];
-    result = temp * 0.008954f;
-    m_adc_physical_value[ADC_CH_W_I] = result;
-#endif
-
     /**
      * 经过 自研控制板的 电流采样 自研电机驱动板
      *
@@ -121,17 +169,20 @@ static void adc_inj_data_to_physical_value(void)
     temp = m_adc_inj_origin_data[0] - m_adc_i_offset_origin_data[0];
     // 公式统一处理  ( adc * 3.30f / 4095.0f * 4.0f / 3.0f - 2.50f ) / 0.02f = (adc * 0.001074 - 2.50f) / 0.02f = adc * 0.053724 - 125.0f
     result = temp * 0.053724f;
-    m_adc_physical_value[ADC_CH_U_I] = result;
+    // m_adc_physical_value[ADC_CH_U_I] = result;   //直接取值
+    m_adc_physical_value[ADC_CH_U_I] =  result * 0.1 + m_adc_physical_value[ADC_CH_U_I] * 0.9;   //一阶滤波处理
 
     // V_I
     temp = m_adc_inj_origin_data[1] - m_adc_i_offset_origin_data[1];
     result = temp * 0.053724f;
-    m_adc_physical_value[ADC_CH_V_I] = result;
+    //m_adc_physical_value[ADC_CH_V_I] = result;
+    m_adc_physical_value[ADC_CH_V_I] = result * 0.1 + m_adc_physical_value[ADC_CH_V_I] * 0.9;   //一阶滤波处理
 
     // W_I
     temp = m_adc_inj_origin_data[2] - m_adc_i_offset_origin_data[2];
     result = temp * 0.053724f;
-    m_adc_physical_value[ADC_CH_W_I] = result;
+    //m_adc_physical_value[ADC_CH_W_I] = result;
+    m_adc_physical_value[ADC_CH_W_I] = result * 0.1 + m_adc_physical_value[ADC_CH_W_I] * 0.9;   //一阶滤波处理
 }
 
 static uint16_t m_test_ticks = 0;
@@ -142,9 +193,8 @@ static uint16_t m_test_ticks = 0;
 int sensors_task(void)
 {
     static uint32_t offset_i_cal_ticks = 0;
-
-    static uint32_t offset_i_adc_buff[3][ADC_I_OFFSET_SAMP_TIMES] = {0};     //
-    static uint8_t  offset_i_samp_index = 0;                                 //静态电流采样索引
+    static uint8_t  ofset_i_samp_cnt = 0;           //静态电流采样次数
+    static uint32_t offset_i_adc_total[3] = {0};    //静态电流平均值U,V,W
 
     //静态电流采样
     if(IS_PRE_MINUS_MID_OVER_POST(sys_time_ms_get(), offset_i_cal_ticks, 50))   //间隔 50ms
@@ -153,36 +203,30 @@ int sensors_task(void)
 
         if(g_app_param.motor_sta == MOTOR_STA_STOP)     //电机处于停止状态
         {
-            uint32_t offset_i_adc_total[3] = {0};      //静态电流平均值U,V,W
-            
-            offset_i_adc_buff[0][offset_i_samp_index] = m_adc_inj_origin_data[0];
-            offset_i_adc_buff[1][offset_i_samp_index] = m_adc_inj_origin_data[1];
-            offset_i_adc_buff[2][offset_i_samp_index] = m_adc_inj_origin_data[2];
+            offset_i_adc_total[0] += m_adc_inj_origin_data[0];
+            offset_i_adc_total[1] += m_adc_inj_origin_data[1];
+            offset_i_adc_total[2] += m_adc_inj_origin_data[2];
 
-            offset_i_samp_index++;
-            if(offset_i_samp_index > ADC_I_OFFSET_SAMP_TIMES)                //每50次统计一次静态值 10 * 1000
+            ofset_i_samp_cnt++;
+            if(ofset_i_samp_cnt >= ADC_I_OFFSET_SAMP_TIMES)               //每50次统计一次静态值
             {
-                offset_i_samp_index = 0;                                     //重置采样索引
+                ofset_i_samp_cnt = 0;                                     //重置采样索引
 
-                for(uint8_t i = 0; i < 3; i++)
-                {
-                    offset_i_adc_total[i] = 0;
+                m_adc_i_offset_origin_data[0] = offset_i_adc_total[0] / ADC_I_OFFSET_SAMP_TIMES;
+                m_adc_i_offset_origin_data[1] = offset_i_adc_total[1] / ADC_I_OFFSET_SAMP_TIMES;
+                m_adc_i_offset_origin_data[2] = offset_i_adc_total[2] / ADC_I_OFFSET_SAMP_TIMES;
 
-                    for(uint8_t j = 0; j < ADC_I_OFFSET_SAMP_TIMES; j++)
-                    {
-                        offset_i_adc_total[i] += offset_i_adc_buff[i][j];
-                    }
+                offset_i_adc_total[0] = 0;
+                offset_i_adc_total[1] = 0;
+                offset_i_adc_total[2] = 0;
 
-                    offset_i_adc_total[i] /= ADC_I_OFFSET_SAMP_TIMES;       //计算平均值
-                    m_adc_i_offset_origin_data[i] = offset_i_adc_total[i];    //保存静态电流偏移数据
-                }
+                m_adc_i_offset_cal_done = true;    //电流偏置采样完成标志
 
-                g_app_param.ofset_curr_col_done = true;    //电流偏置采样完成标志
-
-//                trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
+//              trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
             }
         }
     }
+
 
     // 常规采样
     static uint32_t sens_collect_ticks = 0;
@@ -196,7 +240,6 @@ int sensors_task(void)
 
     static uint8_t  adc_collect_cnt = 0;
 
-#if 1
     if(IS_PRE_MINUS_MID_OVER_POST(sys_time_ms_get(), sens_collect_ticks, 100))   //间隔 100 ms
     {
         sens_collect_ticks = sys_time_ms_get();
@@ -217,7 +260,7 @@ int sensors_task(void)
             m_adc_average_data[ADC_CH_PIM_T]       = pit_t_total / 10;
             m_adc_average_data[ADC_CH_RAD_T]       = rad_t_total / 10;
             m_adc_average_data[ADC_CH_VCC_VOLT]    = vcc_volt_total / 10;
-            m_adc_average_data[ADC_CH_BOX_T]       = box_t_total / 10;
+            m_adc_average_data[ADC_CH_CTL_BSP_T]   = box_t_total / 10;
             m_adc_average_data[ADC_CH_BASE_VOLT]   = base_volt_total / 10;
             m_adc_average_data[ADC_CH_UBUS_VOLT]   = ubus_volt_total / 10;
 
@@ -235,7 +278,7 @@ int sensors_task(void)
                 m_adc_average_data[ADC_CH_PIM_T],
                 m_adc_average_data[ADC_CH_RAD_T],
                 m_adc_average_data[ADC_CH_VCC_VOLT],
-                m_adc_average_data[ADC_CH_BOX_T],
+                m_adc_average_data[ADC_CH_CTL_BSP_T],
                 m_adc_average_data[ADC_CH_BASE_VOLT],
                 m_adc_average_data[ADC_CH_UBUS_VOLT],
                 sys_time_ms_get() );
@@ -246,17 +289,18 @@ int sensors_task(void)
                 m_adc_physical_value[ADC_CH_PIM_T],
                 m_adc_physical_value[ADC_CH_RAD_T],
                 m_adc_physical_value[ADC_CH_VCC_VOLT],
-                m_adc_physical_value[ADC_CH_BOX_T],
+                m_adc_physical_value[ADC_CH_CTL_BSP_T],
                 m_adc_physical_value[ADC_CH_BASE_VOLT],
                 m_adc_physical_value[ADC_CH_UBUS_VOLT],
                 m_adc_physical_value[ADC_CH_U_I],
                 m_adc_physical_value[ADC_CH_V_I],
                 m_adc_physical_value[ADC_CH_W_I] );
 #endif
-            
+
         }
     }
-#endif
+
+    
 
 // 中断计时验证
 #if 0
@@ -289,6 +333,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
     }
 }
 
+
 /**
  * @brief       注入通道ADC转换完成的回调函数， 参考 adc3_inj_start 执行频率，目前应该是 10K
  * @param       无
@@ -302,19 +347,27 @@ void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
         m_adc_inj_origin_data[1] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_2); //V电流
         m_adc_inj_origin_data[2] = HAL_ADCEx_InjectedGetValue(&g_adc3_handle, ADC_INJECTED_RANK_3); //W电流
 
-        if(g_app_param.ofset_curr_col_done)
+        if(m_adc_i_offset_cal_done)             // 静态电流采集完成flag
         {
-            adc_inj_data_to_physical_value();
-        }
+            adc_inj_data_to_physical_value();   // 转为物理量
 
+            if(g_app_param.curr_speed_ring_s != 0)  // 避免除0错误， 且能确认到电机在转动
+            {
+                m_rms_curr_req_samp_cnt = (uint16_t)(FOC_FREQ / g_app_param.curr_speed_ring_s);   // 计算均方根电流采样次数
+                adc_uvw_rms_curr_cal();     // 要运动起来后才有周期，才能计算UVW三相均方根电流
+            }
+
+            //检测阶跃电流，和均方根电流
+            uvw_current_check_handle(m_adc_physical_value[ADC_CH_U_I], m_adc_physical_value[ADC_CH_V_I], m_adc_physical_value[ADC_CH_W_I]);
+
+            //电机在非停机状态下都要运行
+            if((g_app_param.motor_sta > MOTOR_STA_STOP) && (g_app_param.motor_sta < MOTOR_STA_ERROR))    
+            {
+                g_app_param.vf_curr_theta += g_app_param.vf_step_rad;
+                g_app_param.vf_curr_theta = radian_normalize(g_app_param.vf_curr_theta);
+                motor_vf_run();
+            }
+        }
 //        m_test_ticks++;
-
-        //电机在非停机状态下都要运行
-        if((g_app_param.motor_sta > MOTOR_STA_STOP) && (g_app_param.motor_sta < MOTOR_STA_ERROR))    
-        {
-            g_app_param.vf_curr_theta += g_app_param.vf_step_rad;
-            g_app_param.vf_curr_theta = radian_normalize(g_app_param.vf_curr_theta);
-            motor_vf_run();
-        }
     }
 }
