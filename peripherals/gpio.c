@@ -10,6 +10,7 @@ int bsp_gpio_init(void)
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
     __HAL_RCC_GPIOE_CLK_ENABLE();
 
     gpio_init_struct.Pin     = TEST0_IO_PIN | TEST1_IO_PIN ;
@@ -43,6 +44,14 @@ int bsp_gpio_init(void)
     gpio_init_struct.Pull    = GPIO_NOPULL;
     gpio_init_struct.Speed   = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &gpio_init_struct);
+
+    gpio_init_struct.Pin     = USART2_RD_TX_DIR_PIN ;
+    gpio_init_struct.Mode    = GPIO_MODE_OUTPUT_PP;
+    gpio_init_struct.Pull    = GPIO_NOPULL;
+    gpio_init_struct.Speed   = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOD, &gpio_init_struct);
+
+    gpio_output_set(USART2_RD_TX_DIR_PORT, USART2_RD_TX_DIR_PIN, 0);    // 打开 485接收
 
     return 0;
 }

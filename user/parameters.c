@@ -22,13 +22,18 @@ app_param_t g_app_param = {
     .step_ring_s = 1.0f,
     .vf_ratio = 1.5f,
 
-    .u_rms_curr = 0.0f,
-    .v_rms_curr = 0.0f,
-    .w_rms_curr = 0.0f,
-
+// 阈值
     .step_curr_th  = IGBT_STEP_CURR_TH,
     .over_curr_th  = IGBT_OVERCURR_TH,
     .limit_curr_th = IGBT_LIMIT_CURR_TH,
+
+    .pim_igbt_over_t_th = IGBT_TEMP_TH,
+    .pim_igbt_limit_t_th = IGBT_TEMP_LIMIT_TH,
+    .rad_over_t_th = 80.0f,
+    .rad_limit_t_th = 60.0f,
+    .ctrl_bsp_warn_t_th = 80.0f,
+    .ubus_over_volt_th = MB_VOLT_OVER_TH,
+    .ubus_under_volt_th = MB_VOLT_UNDER_TH,
 
     .evt_code = 0,
 };
@@ -41,6 +46,28 @@ w25nxx_t g_w25nxx_dev = {
     .delay_ms = delay_ms,
     .transfer = spi1_bytes_wr,
 };
+
+lfs_t g_lfs;                        //文件系统
+lfs_file_t g_running_data_file;     //运行数据交记录文档
+lfs_file_t g_boot_cnt_file;         //开机次数记录文档
+
+struct lfs_config lfs_cfg = {
+    // block device operations
+    .read  = w25nxx_lfs_read,
+    .prog  = w25nxx_lfs_write,
+    .erase = w25nxx_lfs_erase,
+    .sync  = w25nxx_lfs_sync,
+
+    // block device configuration
+    .read_size = W25N_PAGE_SIZE,
+    .prog_size = W25N_PAGE_SIZE,
+    .block_size = W25N_BLOCK_128K_SIZE,
+    .block_count = W25N_NUM_OF_BLOCKS,
+    .cache_size = W25N_PAGE_SIZE,
+    .lookahead_size = W25N_PAGE_SIZE,
+    .block_cycles = 500,
+};
+
 
 volt_dq_t           gt_vdq;
 transf_cos_sin_t    gt_cos_sin;

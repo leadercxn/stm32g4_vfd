@@ -56,7 +56,7 @@ C_DEFS =  			\
 -DSTM32G474xx		\
 -DSIMULINK_USE_ARM_MATH		\
 -DTRACE_LEVEL=7		\
-#-DTRACE_ENABLE		\
+-DTRACE_ENABLE		\
 #-DDEBUG_SVPWM		\
 
 # 假如使用VOFA float ，就要屏蔽 TRACE_ENABLE
@@ -82,6 +82,7 @@ C_INCLUDES =  		\
 -I $(SDK_DIR)/components/trace				\
 -I $(SDK_DIR)/components/pid				\
 -I $(SDK_DIR)/external/modbus/inc			\
+-I $(SDK_DIR)/external/littlefs				\
 -I $(SDK_DIR)/drivers/ic/flash				\
 -I peripherals								\
 -I bsp										\
@@ -128,6 +129,8 @@ $(SDK_DIR)/components/pid/pid.c									\
 $(SDK_DIR)/external/modbus/src/mbrtu.c							\
 $(SDK_DIR)/external/modbus/src/mbrtuslave.c						\
 $(SDK_DIR)/external/modbus/src/mbpdu.c							\
+$(SDK_DIR)/external/littlefs/lfs_util.c							\
+$(SDK_DIR)/external/littlefs/lfs.c								\
 $(SDK_DIR)/drivers/ic/flash/w25n01gvxxig.c						\
 user/st_src/system_stm32g4xx.c 	\
 user/st_src/sysmem.c 			\
@@ -147,10 +150,12 @@ user/tasks/sensors_task.c		\
 user/tasks/motor_ctrl_task.c	\
 user/tasks/mb_slaver_task.c		\
 user/tasks/monitor_task.c		\
+user/tasks/record_task.c		\
 user/src/foc.c					\
 user/src/clark.c				\
 user/src/park.c					\
 user/src/vofa.c					\
+user/src/lfs_api.c				\
 user/third_foc/foc_algorithm.c 	\
 user/third_foc/iir_lpf.c 		\
 user/third_foc/smo_pll.c 		\

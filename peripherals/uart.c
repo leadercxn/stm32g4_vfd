@@ -305,7 +305,15 @@ int usart2_tx(uint8_t *p_tx_data, uint16_t len)
         return -HAL_ERROR;
     }
 
-    return HAL_UART_Transmit(&m_huart2_handle, p_tx_data, len, 20);    //超时先写个demo
+    int err_code = 0;
+
+    gpio_output_set(USART2_RD_TX_DIR_PORT, USART2_RD_TX_DIR_PIN, 1);
+
+    err_code = HAL_UART_Transmit(&m_huart2_handle, p_tx_data, len, 20);    //超时先写个demo
+
+    gpio_output_set(USART2_RD_TX_DIR_PORT, USART2_RD_TX_DIR_PIN, 0);
+
+    return err_code;
     //return HAL_UART_Transmit_DMA(&m_huart2_handle, p_tx_data, len);
 }
 

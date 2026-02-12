@@ -80,7 +80,7 @@
 
 //ADC
 #define DSP_ADCB0_PIM_T_PORT        GPIOC
-#define DSP_ADCB0_PIM_T_PIN         GPIO_PIN_0      //IGBT 温度检测  adc12-IN6 -- 32
+#define DSP_ADCB0_PIM_T_PIN         GPIO_PIN_0      //IGBT 温度模块自带检测  adc12-IN6 -- 32
 #define DSP_ADCB1_RAD_T_PORT        GPIOC
 #define DSP_ADCB1_RAD_T_PIN         GPIO_PIN_1      //散热片温度检测  adc12-IN7 -- JX1
 #define DSP_ADCB2_VCC_VOLT_PORT     GPIOC

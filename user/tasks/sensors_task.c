@@ -22,74 +22,94 @@ static uint32_t m_adc_inj_origin_data[3] = {0};                 // 注入通道�
 
 static bool m_adc_i_offset_cal_done = false;                    // 电流偏置校准完成标志
 
-
 static uint16_t m_rms_curr_req_samp_cnt = 0;                    // 均方根要采样的次数
+static float m_u_rms_curr = 0.0f;                               // U相RMS均方根 -- 每一周期值
+static float m_v_rms_curr = 0.0f;
+static float m_w_rms_curr = 0.0f;
+static float m_u_rms_curr_aver = 0.0f;                          // U相RMS均方根 -- 平均值 数个周期平均值
+static float m_v_rms_curr_aver = 0.0f;
+static float m_w_rms_curr_aver = 0.0f;
+
 /**
  * @brief 计算输出UVW三相的 RMS 均方根
+ * 
+ * 放在 HAL_ADCEx_InjectedConvCpltCallback 回调函数中使用， 100us 的执行频率
  */
-static void adc_uvw_rms_curr_cal()
+static void adc_uvw_rms_curr_cal(void)
 {
-    static float m_u_rms_curr_total = 0.0f;             // 统计平方和
-    static float m_v_rms_curr_total = 0.0f;
-    static float m_w_rms_curr_total = 0.0f;
+    static float u_rms_curr_total = 0.0f;             // 统计平方和
+    static float v_rms_curr_total = 0.0f;
+    static float w_rms_curr_total = 0.0f;
     
-    static uint16_t m_old_rms_curr_req_samp_cnt = 0;    //上次设置的要采样的次数
-    static uint16_t m_u_rms_curr_samp_cnt = 0;          //已经采样的次数
-    static uint16_t m_v_rms_curr_samp_cnt = 0;
-    static uint16_t m_w_rms_curr_samp_cnt = 0;
+    static uint16_t old_rms_curr_req_samp_cnt = 0;    //上次设置的要采样的次数
+    static uint16_t rms_curr_samp_cnt = 0;            //已经采样的次数
 
-    if((m_rms_curr_req_samp_cnt == m_old_rms_curr_req_samp_cnt) && (m_rms_curr_req_samp_cnt > 0))  //频率没有变化，继续统计 且 采样要求次数大于0
+    static float u_rms_curr_aver_total = 0.0f;        // 均方根平均值统计
+    static float v_rms_curr_aver_total = 0.0f;
+    static float w_rms_curr_aver_total = 0.0f;
+    static uint16_t rms_curr_aver_cnt = 0;            // 当前均方根平均值统计次数
+
+    if((m_rms_curr_req_samp_cnt == old_rms_curr_req_samp_cnt) && (m_rms_curr_req_samp_cnt > 0))  //频率没有变化，继续统计 且 采样要求次数大于0
     {
         // U
-        m_u_rms_curr_total += (m_adc_physical_value[ADC_CH_U_I] * m_adc_physical_value[ADC_CH_U_I]);
-        m_u_rms_curr_samp_cnt++;
-        if(m_u_rms_curr_samp_cnt >= m_rms_curr_req_samp_cnt)    //采样完成
-        {
-            float rms_value = sqrtf(m_u_rms_curr_total / m_u_rms_curr_samp_cnt);
-            g_app_param.u_rms_curr = rms_value;
-
-            // 重置统计数据
-            m_u_rms_curr_total = 0.0f;
-            m_u_rms_curr_samp_cnt = 0;
-        }
-
+        u_rms_curr_total += (m_adc_physical_value[ADC_CH_U_I] * m_adc_physical_value[ADC_CH_U_I]);
         // V
-        m_v_rms_curr_total += (m_adc_physical_value[ADC_CH_V_I] * m_adc_physical_value[ADC_CH_V_I]);
-        m_v_rms_curr_samp_cnt++;
-        if(m_v_rms_curr_samp_cnt >= m_rms_curr_req_samp_cnt)    //采样完成
-        {
-            float rms_value = sqrtf(m_v_rms_curr_total / m_v_rms_curr_samp_cnt);
-            g_app_param.v_rms_curr = rms_value;
-
-            // 重置统计数据
-            m_v_rms_curr_total = 0.0f;
-            m_v_rms_curr_samp_cnt = 0;
-        }
-
+        v_rms_curr_total += (m_adc_physical_value[ADC_CH_V_I] * m_adc_physical_value[ADC_CH_V_I]);
         // W
-        m_w_rms_curr_total += (m_adc_physical_value[ADC_CH_W_I] * m_adc_physical_value[ADC_CH_W_I]);
-        m_w_rms_curr_samp_cnt++;
-        if(m_w_rms_curr_samp_cnt >= m_rms_curr_req_samp_cnt)    //采样完成
+        w_rms_curr_total += (m_adc_physical_value[ADC_CH_W_I] * m_adc_physical_value[ADC_CH_W_I]);
+
+        rms_curr_samp_cnt++;
+        if(rms_curr_samp_cnt >= m_rms_curr_req_samp_cnt)    //均方根采样完成
         {
-            float rms_value = sqrtf(m_w_rms_curr_total / m_w_rms_curr_samp_cnt);
-            g_app_param.w_rms_curr = rms_value;
+            float rms_value = sqrtf(u_rms_curr_total / rms_curr_samp_cnt);
+            m_u_rms_curr = rms_value;
+
+            rms_value = sqrtf(v_rms_curr_total / rms_curr_samp_cnt);
+            m_v_rms_curr = rms_value;
+
+            rms_value = sqrtf(w_rms_curr_total / rms_curr_samp_cnt);
+            m_w_rms_curr = rms_value;
 
             // 重置统计数据
-            m_w_rms_curr_total = 0.0f;
-            m_w_rms_curr_samp_cnt = 0;
+            u_rms_curr_total = 0.0f;
+            v_rms_curr_total = 0.0f;
+            w_rms_curr_total = 0.0f;
+            rms_curr_samp_cnt = 0;
+
+            u_rms_curr_aver_total += m_u_rms_curr;
+            v_rms_curr_aver_total += m_v_rms_curr;
+            w_rms_curr_aver_total += m_w_rms_curr;
+            rms_curr_aver_cnt++;
+            if(rms_curr_aver_cnt >= 10)    //均方根平均值统计完成
+            {
+                // 计算均方根平均值
+                m_u_rms_curr_aver = u_rms_curr_aver_total / rms_curr_aver_cnt;
+                m_v_rms_curr_aver = v_rms_curr_aver_total / rms_curr_aver_cnt;
+                m_w_rms_curr_aver = w_rms_curr_aver_total / rms_curr_aver_cnt;
+
+                // 重置均方根平均值统计数据
+                u_rms_curr_aver_total = 0.0f;
+                v_rms_curr_aver_total = 0.0f;
+                w_rms_curr_aver_total = 0.0f;
+                rms_curr_aver_cnt = 0;
+            }
         }
     }
     else                                                        //频率发生变化，重新清0
     {
         // 重置统计数据
-        m_u_rms_curr_total = 0.0f;
-        m_v_rms_curr_total = 0.0f;
-        m_w_rms_curr_total = 0.0f;
-        m_u_rms_curr_samp_cnt = 0;
-        m_v_rms_curr_samp_cnt = 0;
-        m_w_rms_curr_samp_cnt = 0;
+        u_rms_curr_total  = 0.0f;
+        v_rms_curr_total  = 0.0f;
+        w_rms_curr_total  = 0.0f;
+        rms_curr_samp_cnt = 0;
 
-        m_old_rms_curr_req_samp_cnt = m_rms_curr_req_samp_cnt;
+// 暂时不用重置平均值的计算
+//        u_rms_curr_aver_total = 0.0f;
+//        v_rms_curr_aver_total = 0.0f;
+//        w_rms_curr_aver_total = 0.0f;
+//        rms_curr_aver_cnt = 0;
+
+        old_rms_curr_req_samp_cnt = m_rms_curr_req_samp_cnt;
     }
 }
 
@@ -103,6 +123,47 @@ float adc_sample_physical_value_get(adc_channel_e ch)
     return m_adc_physical_value[ch];
 }
 
+/**
+ * @brief 获取每一周期的均方根电流值
+ */
+float rms_curr_get(adc_channel_e ch)
+{
+    if(ch == ADC_CH_U_I)
+    {
+        return m_u_rms_curr;
+    }
+    else if(ch == ADC_CH_V_I)
+    {
+        return m_v_rms_curr;
+    }
+    else if(ch == ADC_CH_W_I)
+    {
+        return m_w_rms_curr;
+    }
+    
+    return 0.0f;
+}
+
+/**
+ * @brief 获取均方根电流平均值
+ */
+float rms_curr_aver_get(adc_channel_e ch)
+{ 
+    if(ch == ADC_CH_U_I)
+    {
+        return m_u_rms_curr_aver;
+    }
+    else if(ch == ADC_CH_V_I)
+    {
+        return m_v_rms_curr_aver;
+    }
+    else if(ch == ADC_CH_W_I)
+    {
+        return m_w_rms_curr_aver;
+    }
+    
+    return 0.0f;
+}
 
 /**
  * @brief       adc 规则通道原始数据 转化为 对应的物理量
@@ -257,7 +318,7 @@ int sensors_task(void)
         {
             adc_collect_cnt = 0;
 
-            m_adc_average_data[ADC_CH_PIM_T]       = pit_t_total / 10;
+            m_adc_average_data[ADC_CH_PIM_IGBT_T]  = pit_t_total / 10;
             m_adc_average_data[ADC_CH_RAD_T]       = rad_t_total / 10;
             m_adc_average_data[ADC_CH_VCC_VOLT]    = vcc_volt_total / 10;
             m_adc_average_data[ADC_CH_CTL_BSP_T]   = box_t_total / 10;
@@ -275,7 +336,7 @@ int sensors_task(void)
 
 #if 0
             trace_debug("1_ch6 PIM_T %d, 1_ch7 RAD_T %d, 1_ch8 VCC_VOLT %d, 1_ch9 BOX_T %d, 3_ch7 BASE_VOLT %d, 3_ch11 UBUS_VOLT %d, time %ld \r\n",
-                m_adc_average_data[ADC_CH_PIM_T],
+                m_adc_average_data[ADC_CH_PIM_IGBT_T],
                 m_adc_average_data[ADC_CH_RAD_T],
                 m_adc_average_data[ADC_CH_VCC_VOLT],
                 m_adc_average_data[ADC_CH_CTL_BSP_T],
@@ -284,9 +345,9 @@ int sensors_task(void)
                 sys_time_ms_get() );
 #endif
 
-#if 1
+#if 0
             trace_debug("PIM_T %.2f, RAD_T %.2f, VCC_VOLT %.2fV, BOX_T %.2f, BASE_VOLT %.2fV, UBUS_VOLT %.2fV, I-U %.2f, I-V %.2f, I-W %.2f\r\n",
-                m_adc_physical_value[ADC_CH_PIM_T],
+                m_adc_physical_value[ADC_CH_PIM_IGBT_T],
                 m_adc_physical_value[ADC_CH_RAD_T],
                 m_adc_physical_value[ADC_CH_VCC_VOLT],
                 m_adc_physical_value[ADC_CH_CTL_BSP_T],

@@ -7,6 +7,8 @@
 #include "boards.h"
 #include "foc.h"
 #include "pid.h"
+#include "lfs.h"
+#include "lfs_util.h"
 
 #include "speed_pid.h"
 #include "foc_algorithm.h"
@@ -16,6 +18,10 @@
 #include "if_start.h"
 #include "delay.h"
 #include "spi.h"
+#include "gpio.h"
+#include "timer.h"
+#include "lfs_api.h"
+
 
 #include "w25n01gvxxig.h"
 
@@ -77,10 +83,15 @@
  */
 #define AT24CXX_DEV_ADDR        0xA0        //AT24CXX 器件地址
 
-#define IGBT_STEP_CURR_TH       80.0f       //IGBT 阶跃电流阈值, 单位A
-#define IGBT_OVERCURR_TH        50.0f       //IGBT 过流保护电流阈值, 单位A
-#define IGBT_LIMIT_CURR_TH      30.0f       //IGBT 限流保护电流阈值, 单位A
+#define IGBT_STEP_CURR_TH       30.0f       //IGBT 阶跃电流阈值, 单位A      -- 瞬间电流
+#define IGBT_OVERCURR_TH        17.0f       //IGBT 过流保护电流阈值, 单位A  -- 均方根电流
+#define IGBT_LIMIT_CURR_TH      10.0f       //IGBT 限流保护电流阈值, 单位A  -- 均方根电流
 
+#define IGBT_TEMP_TH            90.0f      //IGBT 过温保护阈值, 单位摄氏度  -- igbt 停机
+#define IGBT_TEMP_LIMIT_TH      75.0f       //IGBT 限温保护阈值, 单位摄氏度  -- igbt 降额运行
+
+#define MB_VOLT_OVER_TH         700         // 母线电压过压保护阈值
+#define MB_VOLT_UNDER_TH        320         // 母线电压欠压保护阈值
 
 // 电机状态
 typedef enum
@@ -97,7 +108,7 @@ typedef enum
     MOTOR_STA_EKF_DEC,      //ekf减速中
     MOTOR_STA_EKF_CONST,    //ekf恒速中
 
-    MOTOR_STA_ERROR,    //故障状态,必停机
+    MOTOR_STA_ERROR,        //故障状态,必停机
 } motor_sta_e;
 
 typedef enum
@@ -181,6 +192,8 @@ typedef enum
 
     REG_CURR_SPEED,    //当前速度
     REG_CURR_THETA,    //当前角度
+    
+    REG_FLASH_W25N_CLR,     //清除 w25n 芯片的数据
 
     REG_EVT_CODE0 = 124,    //事件码 Bit0 ~ bit15
     REG_EVT_CODE1,          //事件码 Bit16 ~ bit31
@@ -199,30 +212,37 @@ typedef enum
  */ 
 typedef enum {
 //ERR 类事件
-    ERR_MB_OVER_VOLT,           //直流母线过压
-    ERR_MB_UNDER_VOLT,          //直流母线欠压
+    ERR_UBUS_OVER_VOLT,         //直流母线过压
+    ERR_UBUS_UNDER_VOLT,        //直流母线欠压
     ERR_U_CURR_SENS,            //U相电流传感器故障
     ERR_V_CURR_SENS,            //V相电流传感器故障
+
     ERR_W_CURR_SENS,            //W相电流传感器故障
     ERR_ROTOR_ABNORMAL,         //转子异常(堵转)
     ERR_STARTUP_FAIL,           //启动失败
-    ERR_PIM_T_OVER,             //PIM   过温故障
-    ERR_RAD_T_OVER,             //散热片 过温故障
+    ERR_PIM_IGBT_T_OVER_TH,     //PIM   过温故障
+
+    ERR_RAD_T_OVER_TH,          //散热片 过温故障
     ERR_IGBT_FLT_HW,            //IGBT故障硬件反馈
     ERR_UVW_IN_PHASE_LOSS_HW,   //UVW 输入缺相硬件反馈
     ERR_U_OVER_CURR,            //U相过流          -- 均值电流过大
+
     ERR_V_OVER_CURR,            //V相过流
     ERR_W_OVER_CURR,            //W相过流
     ERR_U_STEP_CURR,            //U相阶跃电流超限  -- 阶跃瞬间电流过大
     ERR_V_STEP_CURR,            //V相阶跃电流超限
+
     ERR_W_STEP_CURR,            //W相阶跃电流超限
     ERR_U_OUT_PHASE_LOSS,       //U相输出缺相
     ERR_V_OUT_PHASE_LOSS,       //V相输出缺相
     ERR_W_OUT_PHASE_LOSS,       //W相输出缺相
+
+    ERR_TRAN_OUT_ABNORMAL,      //变压器输出异常
 //WARN 类事件
-    WARN_PIM_T_HIGH,            //PIM 高温警告
-    WARN_RAD_T_HIGH,            //散热片 高温警告
-    WARN_BOX_T_HIGH,            //控制板载 高温警告
+    WARN_PIM_IGBT_T_LIMIT,      //PIM 高温警告   -- 限频处理
+    WARN_RAD_T_LIMIT,           //散热片 高温警告
+    WARN_CTRL_BSP_T,            //控制板载 高温警告
+
     WARN_U_CURR_LIMIT,          //U相限流警告     -- 超过限频电流值，降频处理
     WARN_V_CURR_LIMIT,          //V相限流警告
     WARN_W_CURR_LIMIT,          //W相限流警告
@@ -231,9 +251,12 @@ typedef enum {
     WARN_BOX_TSENS_ERR,         //控制板载温度传感器故障
     WARN_PIM_TSENS_ERR,         //PIM 温度传感器故障
     WARN_RAD_TSENS_ERR,         //IGBT散热片 温度传感器故障
+    WARN_BASE_VOLT,             //基准电压异常 -- 只提示
+    WARN_SPIFLASH_ABNOR,        //SPI flash 异常
 //EVT 类事件
     EVT_STARTUP_HW,             //启动硬件反馈
     EVT_RESET_HW,               //复位硬件反馈
+    EVT_DBG,                    //正在调试
 } sys_evtcode_mask_e;
 
 
@@ -264,13 +287,18 @@ typedef struct
     float           step_ring_s;        // 步进加速度，单位：圈/秒
     float           vf_ratio;           // vf比例系数
 
-    float           u_rms_curr;         // U相均方根电流，单位A
-    float           v_rms_curr;         // V相均方根电流，单位A
-    float           w_rms_curr;         // W相均方根电流，单位A
 // 阈值
     float           step_curr_th;       // 阶跃电流阈值
     float           over_curr_th;       // 过流保护阈值
     float           limit_curr_th;      // 限流保护阈值
+
+    float           pim_igbt_over_t_th;        // pim-igbt 过温保护阈值
+    float           pim_igbt_limit_t_th;       // pim-igbt 限温保护阈值
+    float           rad_over_t_th;             // 散热片过温保护阈值
+    float           rad_limit_t_th;            // 散热片限温保护阈值
+    float           ctrl_bsp_warn_t_th;        // 控制板温度预警值
+    uint16_t        ubus_over_volt_th;         // 母线过压阈值
+    uint16_t        ubus_under_volt_th;        // 母线欠压阈值
 
     uint64_t        evt_code;           // 事件代码
 } app_param_t;
@@ -309,6 +337,11 @@ typedef struct
 
 extern mb_ctrl_param_t g_mb_ctrl_param;
 extern w25nxx_t g_w25nxx_dev;
+
+extern lfs_t g_lfs;
+extern lfs_file_t g_running_data_file;
+extern lfs_file_t g_boot_cnt_file;
+extern struct lfs_config lfs_cfg;
 
 extern volt_dq_t           gt_vdq;
 extern transf_cos_sin_t    gt_cos_sin;

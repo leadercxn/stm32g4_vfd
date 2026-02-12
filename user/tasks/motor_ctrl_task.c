@@ -142,7 +142,11 @@ void motor_vf_run(void)
                 g_app_param.vf_step_rad = RING_PER_S_2_RAD(m_short_target_speed_ring_s);
             }
 
-            g_app_param.vf_target_uq = m_short_target_speed_ring_s * g_app_param.vf_ratio;   // 设置 Uq限幅
+            g_app_param.vf_target_uq = m_short_target_speed_ring_s * g_app_param.vf_ratio;   // 设置 Uq
+            if(g_app_param.vf_target_uq >= (adc_sample_physical_value_get(ADC_CH_UBUS_VOLT) * 0.5f - 20.0f))    // Uq 限幅
+            {
+                g_app_param.vf_target_uq = adc_sample_physical_value_get(ADC_CH_UBUS_VOLT) * 0.5f - 20.0f;
+            }
         }
 
         g_foc_input.theta  = g_app_param.vf_curr_theta;
@@ -304,13 +308,13 @@ static void vofa_send(void)
     justfloat_update(g_foc_input.ib,    0);             //V相电流       -- 3
     justfloat_update(g_foc_input.ic,    0);             //W相电流       -- 4
     justfloat_update(g_current_dq.iq,    0);            //当前Iq        -- 5
-    justfloat_update(g_foc_input.iq_ref,    0);         //目标Iq        -- 6
+    justfloat_update(g_foc_input.iq_ref, 0);            //目标Iq        -- 6
     justfloat_update(g_voltage_dq.vd,    0);            //实际的vd,传入到svpwm计算 -- 7
     justfloat_update(g_voltage_dq.vq,    0);            //实际的Vq,传入到svpwm计算 -- 8
-    justfloat_update(g_app_param.u_rms_curr,    0);     //U相均方根电流     -- 9
-    justfloat_update(g_app_param.v_rms_curr,    0);     //V相均方根电流     -- 10
-    justfloat_update(g_app_param.w_rms_curr,    0);     //W相均方根电流     -- 11
-    justfloat_update(g_app_param.curr_speed_ring_s, 0); //电机当前速度      -- 12
+    justfloat_update(rms_curr_aver_get(ADC_CH_U_I), 0);   //U相均方根电流     -- 9
+    justfloat_update(rms_curr_aver_get(ADC_CH_V_I), 0);   //V相均方根电流     -- 10
+    justfloat_update(rms_curr_aver_get(ADC_CH_W_I), 0);   //W相均方根电流     -- 11
+    justfloat_update(g_app_param.curr_speed_ring_s, 0);   //电机当前速度      -- 12
     justfloat_update(g_app_param.vf_curr_theta,  0);    //强拖的角度        -- 13
     justfloat_update(g_app_param.vf_step_rad,  0);      //vf步幅           -- 14
     justfloat_update(temp,  1);                         //实际的 V/F 比    -- 15
@@ -544,7 +548,7 @@ int motor_ctrl_task(void)
                 phase_pwm_stop();
 
                 g_app_param.curr_iq = 0.0f;
-                g_app_param.vf_curr_uq = 0.0f;
+                g_app_param.vf_curr_uq = 0.0f;                      //避免每次开机时，Uq 电压过大
                 g_app_param.vf_curr_theta = 0.0f;
                 g_app_param.curr_speed_ring_s = 0.0f;
 
@@ -567,16 +571,16 @@ int motor_ctrl_task(void)
 
         case MOTOR_STA_ERROR:
             gpio_output_set(DSP_DRIVE_IGBT_PORT, DSP_DRIVE_IGBT_PIN, 1);  // 关闭 IGBT光耦驱动
+            gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);  // 断开 主回路继电器
 
             if(g_app_param.motor_sta != g_app_param.pre_motor_sta)  //开始停机
             {
                 phase_pwm_stop();
 
                 g_app_param.curr_iq = 0.0f;
-                g_app_param.vf_curr_uq = 0.0f;
+                g_app_param.vf_curr_uq = 0.0f;                      //避免每次开机时，Uq 电压过大
                 g_app_param.vf_curr_theta = 0.0f;
-
-
+                g_app_param.curr_speed_ring_s = 0.0f;
 
                 foc_algorithm_init();                               //FOC 算法参数初始化
 

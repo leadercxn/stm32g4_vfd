@@ -22,8 +22,10 @@
 #include "motor_ctrl_task.h"
 #include "mb_slaver_task.h"
 #include "monitor_task.h"
+#include "record_task.h"
 
 #include "at24cxx.h"
+#include "lfs_api.h"
 
 #include "foc.h"
 //#include "ekf.h"
@@ -86,6 +88,43 @@ void sin_cal_speed_compare(void)
     trace_debug("arm_sin_f32 %lu\r\n", ticks_delta);
 }
 
+static void test_task(void)
+{
+#if 0
+    uint8_t crc_data[32] = {0};
+    int err_code = 0;
+
+    err_code = w25nxx_fast_read_with_BUF_r(&g_w25nxx_dev, 0, crc_data, 32);
+    trace_debug("W25N Read api return %d , crc :\r\n", err_code);
+    trace_dump(crc_data, 32);
+#endif
+
+    bool run_once = true;
+    uint32_t boot_count = 0;
+
+    if(run_once)
+    {
+      run_once = false;
+
+		  lfs_file_open(&g_lfs, &g_boot_cnt_file, "boot_count", LFS_O_RDWR | LFS_O_CREAT);
+		  lfs_file_read(&g_lfs, &g_boot_cnt_file, &boot_count, sizeof(boot_count));
+
+      // update boot count
+      boot_count += 1;
+      lfs_file_rewind(&g_lfs, &g_boot_cnt_file);  // seek the file to begin
+      lfs_file_write(&g_lfs, &g_boot_cnt_file, &boot_count, sizeof(boot_count));
+
+		  // remember the storage is not updated until the file is closed successfully
+		  lfs_file_close(&g_lfs, &g_boot_cnt_file);
+
+//		// release any resources we were using
+//		lfs_unmount(&lfs);
+
+		  // print the boot count
+		  trace_debug("boot_count: %d\n", boot_count);
+    }
+}
+
 int main(void)
 {
   int err_code = 0;
@@ -104,6 +143,8 @@ int main(void)
   usart1_init();    //usart1 初始化, 用于串口打印调试信息
   usart2_init();    //usart2 初始化, 用于 modbus 数据交互
 
+  trace_info("\r\n STM32G474 FOC Test Start \r\n\r\n");
+
   timer1_init();    //用于生成PWM
 
   if(adc1_init() != HAL_OK)
@@ -121,12 +162,48 @@ int main(void)
 
 //w25q flash 测试
   w25nxx_reset(&g_w25nxx_dev);
-
   w25nxx_jedec_id_read(&g_w25nxx_dev, &w25n_id);
   trace_debug("W25N ID %#X\r\n", w25n_id);
 
-  w25nxx_reg_write(&g_w25nxx_dev, PROT_REG_SR1, 0);
-  w25nxx_reg_write(&g_w25nxx_dev, CFG_REG_SR2, 0x18);
+  // 挂载 lfs
+  if(w25n_id == W25N01GV)
+  {
+    w25nxx_reg_write(&g_w25nxx_dev, PROT_REG_SR1, 0);
+    w25nxx_reg_write(&g_w25nxx_dev, CFG_REG_SR2, 0x18);
+
+    trace_debug("try to mount lfs\r\n");
+    err_code = lfs_mount(&g_lfs, &lfs_cfg);
+
+    if(err_code)
+    {
+      trace_debug("lfs mount err_code %d, try to erase w25n, wait ...\r\n", err_code);
+      w25nxx_chip_erase(&g_w25nxx_dev);   // 全片擦除
+      trace_debug("erase w25n done, retry to mount lfs again.. \r\n");
+
+      lfs_format(&g_lfs, &lfs_cfg);
+      err_code = lfs_mount(&g_lfs, &lfs_cfg);
+      trace_debug("lfs again mount err_code %d\r\n", err_code);
+
+      if(err_code)
+      {
+        trace_debug("lfs mount fail.\r\n");
+
+        hmi_event_set(WARN_SPIFLASH_ABNOR);   //设置SPI flash异常事件
+      }
+      else
+      {
+        trace_debug("lfs mount success.\r\n");
+      }
+    }
+    else
+    {
+      trace_debug("lfs mount success.\r\n");
+    }
+  }
+  else
+  {
+    hmi_event_set(WARN_SPIFLASH_ABNOR);   //设置SPI flash异常事件
+  }
 
 // spi flash 测试
 #if 0
@@ -157,7 +234,6 @@ int main(void)
       trace_debug("W25N Read api return %d , crc :\r\n", err_code);
       trace_dump(&crc_data[4], 4);
   }
-  
 #endif
 
 //i2c eeprom 测试
@@ -182,8 +258,6 @@ int main(void)
 
   TIMER_INIT();   // 调度定时器初始化，用于简单的ms级定时器调度
 
-  trace_info("\r\n STM32G474 FOC Test Start \r\n\r\n");
-
 // float 类型绝对值测试
 #if 0
   float test_iu = 2.3456f;
@@ -202,6 +276,8 @@ int main(void)
 
   gpio_output_set(DSP_LED_ERR_PORT, DSP_LED_ERR_PIN, 1);
   gpio_output_set(DSP_RELAY_IGBT_PORT, DSP_RELAY_IGBT_PIN, 0);  // 先断开 主回路继电器
+
+  test_task();   //测试任务
 
   while (1)
   {
@@ -236,6 +312,7 @@ int main(void)
 //        sin_cal_speed_compare();
         trace_debug("evt code %#llx, time %ld s\r\n", g_app_param.evt_code, test_inter_ticks/1000);
 
+#if 0
         trace_debug("IN: startup-%d, rst-%d, igbt-flt-%d, eb-wu-%d, ea-vu-%d, uvw-%d\r\n", 
             gpio_input_get(DSP_X1_STARTUP_PORT, DSP_X1_STARTUP_PIN),
             gpio_input_get(DSP_X2_RST_PORT, DSP_X2_RST_PIN),
@@ -243,6 +320,7 @@ int main(void)
             gpio_input_get(DSP_EB_WU_ERR_PORT, DSP_EB_WU_ERR_PIN),
             gpio_input_get(DSP_EA_VU_ERR_PORT, DSP_EA_VU_ERR_PIN),
             gpio_input_get(DSP_UVW_PHASE_LOSS_PORT, DSP_UVW_PHASE_LOSS_PIN) );
+#endif
       }
 
       sensors_task();         //传感器任务
@@ -252,6 +330,8 @@ int main(void)
       mb_slaver_task();       //modbus 从机任务
 
       monitor_task();         //监控任务
+
+      record_task();          //记录任务
 
       mid_timer_loop_task();  //调度定时器的循环执行
   }
