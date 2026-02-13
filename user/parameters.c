@@ -48,7 +48,7 @@ w25nxx_t g_w25nxx_dev = {
 };
 
 lfs_t g_lfs;                        //文件系统
-lfs_file_t g_running_data_file;     //运行数据交记录文档
+lfs_file_t g_running_log_file;     //运行数据交记录文档
 lfs_file_t g_boot_cnt_file;         //开机次数记录文档
 
 struct lfs_config lfs_cfg = {

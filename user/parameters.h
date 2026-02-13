@@ -5,6 +5,7 @@
 
 #include "sys.h"
 #include "boards.h"
+#include "version.h"
 #include "foc.h"
 #include "pid.h"
 #include "lfs.h"
@@ -25,6 +26,8 @@
 
 #include "w25n01gvxxig.h"
 
+
+//外设参数
 #define SYS_CLK_FREQ    170000000
 #define PWM_FREQ        20000       //20K
 #define PWM_PERIOD      8500        //(SYS_CLK_FREQ / PWM_FREQ)
@@ -65,13 +68,6 @@
 #define SPEED_PI_UP_LIMIT   6.0f
 
 // Q轴电流环默认参数
-#if 0
-#define Q_PI_P              3.199f
-#define Q_PI_I              2282.8f
-#define Q_PI_KB             15.0f
-#define Q_PI_LOW_LIMIT      -10.0f
-#define Q_PI_UP_LIMIT       10.0f
-#endif
 #define Q_PI_P              1.199f
 #define Q_PI_I              1000.0f
 #define Q_PI_KB             5.0f
@@ -92,6 +88,9 @@
 
 #define MB_VOLT_OVER_TH         700         // 母线电压过压保护阈值
 #define MB_VOLT_UNDER_TH        320         // 母线电压欠压保护阈值
+
+#define RUNNING_LOG_FILE        "running.log"
+
 
 // 电机状态
 typedef enum
@@ -339,8 +338,10 @@ extern mb_ctrl_param_t g_mb_ctrl_param;
 extern w25nxx_t g_w25nxx_dev;
 
 extern lfs_t g_lfs;
-extern lfs_file_t g_running_data_file;
+extern lfs_file_t g_running_log_file;
+
 extern lfs_file_t g_boot_cnt_file;
+
 extern struct lfs_config lfs_cfg;
 
 extern volt_dq_t           gt_vdq;

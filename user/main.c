@@ -90,17 +90,12 @@ void sin_cal_speed_compare(void)
 
 static void test_task(void)
 {
-#if 0
-    uint8_t crc_data[32] = {0};
-    int err_code = 0;
-
-    err_code = w25nxx_fast_read_with_BUF_r(&g_w25nxx_dev, 0, crc_data, 32);
-    trace_debug("W25N Read api return %d , crc :\r\n", err_code);
-    trace_dump(crc_data, 32);
-#endif
-
     bool run_once = true;
     uint32_t boot_count = 0;
+    int32_t  offset = 0;
+    int32_t  file_size = 0;
+
+    int err_code = 0;
 
     if(run_once)
     {
@@ -114,15 +109,28 @@ static void test_task(void)
       lfs_file_rewind(&g_lfs, &g_boot_cnt_file);  // seek the file to begin
       lfs_file_write(&g_lfs, &g_boot_cnt_file, &boot_count, sizeof(boot_count));
 
-		  // remember the storage is not updated until the file is closed successfully
+      offset = lfs_file_seek(&g_lfs, &g_boot_cnt_file, 0, LFS_SEEK_CUR);
+
+      file_size = lfs_file_size(&g_lfs, &g_boot_cnt_file);
+
 		  lfs_file_close(&g_lfs, &g_boot_cnt_file);
 
-//		// release any resources we were using
 //		lfs_unmount(&lfs);
 
 		  // print the boot count
-		  trace_debug("boot_count: %d\n", boot_count);
+		  trace_debug("boot_count: %d, offset = %d, file size %d\n", boot_count, offset, file_size);
+
+      err_code = lfs_remove(&g_lfs, "boot_count");
+      trace_debug("file remove err_code %d\r\n", err_code);
+
+//验证 littlefs 储存数据是否有问题使用
+#if 1
+      err_code = lfs_remove(&g_lfs, RUNNING_LOG_FILE);
+      trace_debug("%s file remove err_code %d\r\n", RUNNING_LOG_FILE, err_code);
+#endif
     }
+
+
 }
 
 int main(void)
@@ -204,37 +212,6 @@ int main(void)
   {
     hmi_event_set(WARN_SPIFLASH_ABNOR);   //设置SPI flash异常事件
   }
-
-// spi flash 测试
-#if 0
-  uint8_t crc_data[32] = {0};
-  uint8_t p_data[4] = {0x33, 0x44, 0x55, 0x77};
-
-  err_code = w25nxx_fast_read_with_BUF(&g_w25nxx_dev, SECTOR0_COL_ADDRESS, 0, crc_data, 4);
-  trace_debug("W25N Read api return %d , crc :\r\n", err_code);
-  trace_dump(crc_data, 4);
-
-  if( (crc_data[0] == 0x33) && (crc_data[1] == 0x44) && (crc_data[2] == 0x55) && (crc_data[3] == 0x77) )
-  {
-      trace_debug("W25N CRC Data OK\r\n");
-  }
-  else
-  {
-      trace_debug("W25N CRC Data Error\r\n");
-      if( (crc_data[0] != 0xFF) || (crc_data[1] != 0xFF) || (crc_data[2] != 0xFF) || (crc_data[3] != 0xFF) )
-      {
-          trace_debug("W25N CRC Data no origin\r\n"); //非原始数据
-          w25nxx_block_128k_erase(&g_w25nxx_dev, 0);
-      }
-
-      err_code = w25nxx_data_write(&g_w25nxx_dev, SECTOR0_COL_ADDRESS, 0, p_data, 4);
-      trace_debug("W25N data Write api return %d\r\n", err_code);
-
-      w25nxx_fast_read_with_BUF(&g_w25nxx_dev, SECTOR0_COL_ADDRESS, 0, &crc_data[4], 4);
-      trace_debug("W25N Read api return %d , crc :\r\n", err_code);
-      trace_dump(&crc_data[4], 4);
-  }
-#endif
 
 //i2c eeprom 测试
 #if 0

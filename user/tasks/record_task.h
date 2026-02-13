@@ -5,13 +5,11 @@
 
 typedef struct
 {
+    uint16_t    app_ver;                //app版本，方便记录不同版本不同的数据结构
+    uint16_t    boot_cnt;               //上电次数
     uint32_t    record_frame_id;        //记录帧ID, 每次记录加1
-
-    uint16_t    power_on_cnt;           //上电次数
     motor_sta_e motor_sta;              //系统模式
-    uint8_t     crc;                    //数据校验
 
-    uint32_t    record_cnt;             //记录次数 -- 累计，掉电也累计
     uint64_t    sys_tick;               //系统时间
     uint64_t    evt_code;               //系统事件码
 
@@ -27,7 +25,7 @@ typedef struct
     float       v_i_rms_aver;           //V相均方根电流值
     float       w_i_rms_aver;           //W相均方根电流值
     float       ubus_volt;              //母线电压值
-} __attribute__((__packed__ )) running_record_data_t;
+} __attribute__((__packed__ )) running_log_t;
 
 
 int record_task(void);
