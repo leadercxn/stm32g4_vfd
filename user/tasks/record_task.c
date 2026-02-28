@@ -163,15 +163,13 @@ int record_task(void)
         lfs_file_close(&g_lfs, &g_running_log_file);
     }
 
-    
-
     if(IS_PRE_MINUS_MID_OVER_POST(sys_time_ms_get(), record_ticks, 30000))   //间隔
     {
         record_ticks = sys_time_ms_get();
 
-        trace_debug("START RECORD DATA %d\r\n", sizeof(running_log_t));
+        trace_debug("START RECORD DATA len %d\r\n", sizeof(running_log_t));
 
-        running_log_record_handle();        //记录一次运行数据
+        running_log_record_handle();            //记录一次运行数据
     }
 
     if(old_evt_code != g_app_param.evt_code)    //事件码发生变化，记录一次
@@ -183,7 +181,7 @@ int record_task(void)
         running_log_record_handle();        //记录一次运行数据
     }
 
-    running_log_printf();
+//    running_log_printf();
 
     return 0;
 }

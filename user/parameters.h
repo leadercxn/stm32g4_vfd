@@ -211,50 +211,50 @@ typedef enum
  */ 
 typedef enum {
 //ERR 类事件
-    ERR_UBUS_OVER_VOLT,         //直流母线过压
-    ERR_UBUS_UNDER_VOLT,        //直流母线欠压
-    ERR_U_CURR_SENS,            //U相电流传感器故障
-    ERR_V_CURR_SENS,            //V相电流传感器故障
+    ERR_UBUS_OVER_VOLT,         //直流母线过压 - done
+    ERR_UBUS_UNDER_VOLT,        //直流母线欠压 - done
+    ERR_U_CURR_SENS,            //U相电流传感器故障 - done
+    ERR_V_CURR_SENS,            //V相电流传感器故障 - done
 
-    ERR_W_CURR_SENS,            //W相电流传感器故障
+    ERR_W_CURR_SENS,            //W相电流传感器故障 - done
     ERR_ROTOR_ABNORMAL,         //转子异常(堵转)
     ERR_STARTUP_FAIL,           //启动失败
-    ERR_PIM_IGBT_T_OVER_TH,     //PIM   过温故障
+    ERR_PIM_IGBT_T_OVER_TH,     //PIM   过温故障   - done
 
-    ERR_RAD_T_OVER_TH,          //散热片 过温故障
-    ERR_IGBT_FLT_HW,            //IGBT故障硬件反馈
-    ERR_UVW_IN_PHASE_LOSS_HW,   //UVW 输入缺相硬件反馈
-    ERR_U_OVER_CURR,            //U相过流          -- 均值电流过大
+    ERR_RAD_T_OVER_TH,          //散热片 过温故障 - done
+    ERR_IGBT_FLT_HW,            //IGBT故障硬件反馈 - done
+    ERR_UVW_IN_PHASE_LOSS_HW,   //UVW 输入缺相硬件反馈 - done
+    ERR_U_OVER_CURR,            //U相过流          -- 均值电流过大 - done
 
-    ERR_V_OVER_CURR,            //V相过流
-    ERR_W_OVER_CURR,            //W相过流
-    ERR_U_STEP_CURR,            //U相阶跃电流超限  -- 阶跃瞬间电流过大
-    ERR_V_STEP_CURR,            //V相阶跃电流超限
+    ERR_V_OVER_CURR,            //V相过流 - done
+    ERR_W_OVER_CURR,            //W相过流 - done
+    ERR_U_STEP_CURR,            //U相阶跃电流超限  -- 阶跃瞬间电流过大 - done
+    ERR_V_STEP_CURR,            //V相阶跃电流超限 - done
 
-    ERR_W_STEP_CURR,            //W相阶跃电流超限
+    ERR_W_STEP_CURR,            //W相阶跃电流超限 - done
     ERR_U_OUT_PHASE_LOSS,       //U相输出缺相
     ERR_V_OUT_PHASE_LOSS,       //V相输出缺相
     ERR_W_OUT_PHASE_LOSS,       //W相输出缺相
 
-    ERR_TRAN_OUT_ABNORMAL,      //变压器输出异常
+    ERR_TRAN_OUT_ABNORMAL,      //变压器输出异常 - done
 //WARN 类事件
-    WARN_PIM_IGBT_T_LIMIT,      //PIM 高温警告   -- 限频处理
-    WARN_RAD_T_LIMIT,           //散热片 高温警告
-    WARN_CTRL_BSP_T,            //控制板载 高温警告
+    WARN_PIM_IGBT_T_LIMIT,      //PIM 高温警告   -- 限频处理 - done
+    WARN_RAD_T_LIMIT,           //散热片 高温警告 - done
+    WARN_CTRL_BSP_T,            //控制板载 高温警告 - done
 
-    WARN_U_CURR_LIMIT,          //U相限流警告     -- 超过限频电流值，降频处理
-    WARN_V_CURR_LIMIT,          //V相限流警告
-    WARN_W_CURR_LIMIT,          //W相限流警告
-    WARN_EB_WU_HW,              //EB WU硬件反馈
-    WARN_EA_VU_HW,              //EA VU硬件反馈
-    WARN_BOX_TSENS_ERR,         //控制板载温度传感器故障
-    WARN_PIM_TSENS_ERR,         //PIM 温度传感器故障
-    WARN_RAD_TSENS_ERR,         //IGBT散热片 温度传感器故障
-    WARN_BASE_VOLT,             //基准电压异常 -- 只提示
-    WARN_SPIFLASH_ABNOR,        //SPI flash 异常
+    WARN_U_CURR_LIMIT,          //U相限流警告     -- 超过限频电流值，降频处理 - done
+    WARN_V_CURR_LIMIT,          //V相限流警告 - done
+    WARN_W_CURR_LIMIT,          //W相限流警告 - done
+    WARN_EB_WU_HW,              //EB WU硬件反馈 - done
+    WARN_EA_VU_HW,              //EA VU硬件反馈 - done
+    WARN_BOX_TSENS_ERR,         //控制板载温度传感器故障 - 悬空的时候，adc 反馈是悬空值 1900+， 故无法做判断
+    WARN_PIM_TSENS_ERR,         //PIM 温度传感器故障 - 悬空的时候，adc 反馈是悬空值 1900+， 故无法做判断
+    WARN_RAD_TSENS_ERR,         //IGBT散热片 温度传感器故障 - done
+    WARN_BASE_VOLT,             //基准电压异常 -- 只提示 - done
+    WARN_SPIFLASH_ABNOR,        //SPI flash 异常 - done
 //EVT 类事件
-    EVT_STARTUP_HW,             //启动硬件反馈
-    EVT_RESET_HW,               //复位硬件反馈
+    EVT_STARTUP_HW,             //启动硬件反馈 - done
+    EVT_RESET_HW,               //复位硬件反馈 - done
     EVT_DBG,                    //正在调试
 } sys_evtcode_mask_e;
 

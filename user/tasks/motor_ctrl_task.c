@@ -318,6 +318,8 @@ static void vofa_send(void)
     justfloat_update(g_app_param.vf_curr_theta,  0);    //强拖的角度        -- 13
     justfloat_update(g_app_param.vf_step_rad,  0);      //vf步幅           -- 14
     justfloat_update(temp,  1);                         //实际的 V/F 比    -- 15
+    //(FOC_FREQ / g_app_param.curr_speed_ring_s);
+    //justfloat_update((FOC_FREQ / g_app_param.curr_speed_ring_s),  1);                         //实际的 V/F 比    -- 15
 }
 
 /**

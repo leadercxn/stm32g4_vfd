@@ -235,18 +235,6 @@ int main(void)
 
   TIMER_INIT();   // 调度定时器初始化，用于简单的ms级定时器调度
 
-// float 类型绝对值测试
-#if 0
-  float test_iu = 2.3456f;
-  float test_iv = -1.2345f;
-
-  float fabs_value = 0.0f;
-  fabs_value = fabsf(test_iu);
-  trace_debug("test_iu %.4f, fabs %.4f\r\n", test_iu, fabs_value);
-  fabs_value = fabsf(test_iv);
-  trace_debug("test_iv %.4f, fabs %.4f\r\n", test_iv, fabs_value);
-#endif
-
   param_init();   //参数初始化
 
   phase_pwm_start();

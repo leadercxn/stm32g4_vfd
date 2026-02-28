@@ -246,6 +246,95 @@ static void adc_inj_data_to_physical_value(void)
     m_adc_physical_value[ADC_CH_W_I] = result * 0.1 + m_adc_physical_value[ADC_CH_W_I] * 0.9;   //一阶滤波处理
 }
 
+/**
+ * @brief   传感器是否存在检测故障
+ */
+static void sens_exist_fault_check(void)
+{
+    /**
+     * 控制板在不接驱动板的时候，检测到的值都是接近0，可以根据此判断三相电流检测传感器是否故障
+     */
+    static uint32_t sens_check_ticks = 0;
+
+    static uint16_t u_curr_sens_err_cnt = 0;
+    static uint16_t v_curr_sens_err_cnt = 0;
+    static uint16_t w_curr_sens_err_cnt = 0;
+
+    static uint16_t rad_t_sens_warn_cnt = 0;
+
+    #define UVW_CURR_SENS_FAULT_TH      20
+
+    if(IS_PRE_MINUS_MID_OVER_POST(sys_time_ms_get(), sens_check_ticks, 100))   //间隔 100ms
+    {
+        // U相电流传感器
+        if(m_adc_inj_origin_data[0] < UVW_CURR_SENS_FAULT_TH)
+        {
+            u_curr_sens_err_cnt++;
+            if(u_curr_sens_err_cnt > 100)
+            {
+                u_curr_sens_err_cnt = 100;
+                hmi_event_set(ERR_U_CURR_SENS);         // 设置故障
+            }
+        }
+        else
+        {
+            u_curr_sens_err_cnt = 0;
+            hmi_event_clear(ERR_U_CURR_SENS);           // 清除预警
+        }
+
+        // V相电流传感器
+        if(m_adc_inj_origin_data[1] < UVW_CURR_SENS_FAULT_TH)
+        {
+            v_curr_sens_err_cnt++;
+            if(v_curr_sens_err_cnt > 100)
+            {
+                v_curr_sens_err_cnt = 100;
+                hmi_event_set(ERR_V_CURR_SENS);         // 设置故障
+            }
+        }
+        else
+        {
+            v_curr_sens_err_cnt = 0;
+            hmi_event_clear(ERR_V_CURR_SENS);           // 清除预警
+        }
+
+        // W相电流传感器
+        if(m_adc_inj_origin_data[2] < UVW_CURR_SENS_FAULT_TH)
+        {
+            w_curr_sens_err_cnt++;
+            if(w_curr_sens_err_cnt > 100)
+            {
+                w_curr_sens_err_cnt = 100;
+                hmi_event_set(ERR_W_CURR_SENS);         // 设置故障
+            }
+        }
+        else
+        {
+            w_curr_sens_err_cnt = 0;
+            hmi_event_clear(ERR_W_CURR_SENS);           // 清除预警
+        }
+
+#if 0   //目前还只是预留
+        // IGBT 散热片
+        if(m_adc_average_data[ADC_CH_RAD_T] < 20)
+        {
+            rad_t_sens_warn_cnt++;
+            if(rad_t_sens_warn_cnt > 1800)
+            {
+                rad_t_sens_warn_cnt = 1800;
+                hmi_event_set(WARN_RAD_TSENS_ERR);         // 设置事件
+            }
+        }
+        else
+        {
+            rad_t_sens_warn_cnt = 0;
+            hmi_event_clear(WARN_RAD_TSENS_ERR);           // 清除事件
+        }
+#endif
+
+    }
+}
+
 static uint16_t m_test_ticks = 0;
 
 /**
@@ -262,7 +351,7 @@ int sensors_task(void)
     {
         offset_i_cal_ticks = sys_time_ms_get();
 
-        if(g_app_param.motor_sta == MOTOR_STA_STOP)     //电机处于停止状态
+        if((g_app_param.motor_sta == MOTOR_STA_STOP) || (g_app_param.motor_sta == MOTOR_STA_ERROR))     //电机处于停止, 或故障状态
         {
             offset_i_adc_total[0] += m_adc_inj_origin_data[0];
             offset_i_adc_total[1] += m_adc_inj_origin_data[1];
@@ -283,7 +372,7 @@ int sensors_task(void)
 
                 m_adc_i_offset_cal_done = true;    //电流偏置采样完成标志
 
-//              trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
+//                trace_debug("u ofset %lu, v ofset %lu, w ofset %lu \r\n", m_adc_i_offset_origin_data[0], m_adc_i_offset_origin_data[1], m_adc_i_offset_origin_data[2]);
             }
         }
     }
@@ -334,7 +423,7 @@ int sensors_task(void)
 
             adc_reg_origin_data_to_phy_value();     //采样数据转换物理数据
 
-#if 0
+#if 1
             trace_debug("1_ch6 PIM_T %d, 1_ch7 RAD_T %d, 1_ch8 VCC_VOLT %d, 1_ch9 BOX_T %d, 3_ch7 BASE_VOLT %d, 3_ch11 UBUS_VOLT %d, time %ld \r\n",
                 m_adc_average_data[ADC_CH_PIM_IGBT_T],
                 m_adc_average_data[ADC_CH_RAD_T],
@@ -343,6 +432,9 @@ int sensors_task(void)
                 m_adc_average_data[ADC_CH_BASE_VOLT],
                 m_adc_average_data[ADC_CH_UBUS_VOLT],
                 sys_time_ms_get() );
+
+                // 单控制板未接驱动板 数据
+                // 1_ch6 PIM_T 1983, 1_ch7 RAD_T 3, 1_ch8 VCC_VOLT 0, 1_ch9 BOX_T 1010, 3_ch7 BASE_VOLT 3254, 3_ch11 UBUS_VOLT 1
 #endif
 
 #if 0
@@ -361,7 +453,8 @@ int sensors_task(void)
         }
     }
 
-    
+    //传感器故障检测
+    sens_exist_fault_check();
 
 // 中断计时验证
 #if 0

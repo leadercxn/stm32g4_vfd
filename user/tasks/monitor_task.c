@@ -540,11 +540,11 @@ int monitor_task(void)
         // UVW缺相 硬件反馈
         if(gpio_input_get(DSP_UVW_PHASE_LOSS_PORT, DSP_UVW_PHASE_LOSS_PIN))
         {
-            hmi_event_set(WARN_EA_VU_HW);
+            hmi_event_set(ERR_UVW_IN_PHASE_LOSS_HW);
         }
         else
         {
-            hmi_event_clear(WARN_EA_VU_HW);
+            hmi_event_clear(ERR_UVW_IN_PHASE_LOSS_HW);
         }
 
         temp_sens_check_handle();     // 温度传感器检查处理
